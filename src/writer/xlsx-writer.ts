@@ -24,8 +24,8 @@ import {
 
 /** 헤더 스타일 */
 const HEADER_STYLE: Partial<ExcelJS.Style> = {
-  font: { bold: true, color: { argb: "FFFFFFFF" } },
-  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } },
+  font: { bold: true, color: { argb: "FF1F1F1F" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
   alignment: { vertical: "middle", horizontal: "center" },
   border: {
     top: { style: "thin" },
@@ -37,8 +37,8 @@ const HEADER_STYLE: Partial<ExcelJS.Style> = {
 
 /** 섹션 헤더 스타일 */
 const SECTION_HEADER_STYLE: Partial<ExcelJS.Style> = {
-  font: { bold: true, size: 12 },
-  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
+  font: { bold: true, size: 12, color: { argb: "FFFFFFFF" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } },
   alignment: { vertical: "middle" },
   border: {
     top: { style: "thin" },
@@ -51,6 +51,30 @@ const SECTION_HEADER_STYLE: Partial<ExcelJS.Style> = {
 /** 라벨 스타일 */
 const LABEL_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true },
+  alignment: { vertical: "top" },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
+};
+
+const PRIMARY_HEADER_STYLE: Partial<ExcelJS.Style> = {
+  font: { bold: true, color: { argb: "FFFFFFFF" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } },
+  alignment: { vertical: "middle", horizontal: "center" },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
+};
+
+const PRIMARY_LABEL_STYLE: Partial<ExcelJS.Style> = {
+  font: { bold: true, color: { argb: "FFFFFFFF" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF4472C4" } },
   alignment: { vertical: "top" },
   border: {
     top: { style: "thin" },
@@ -201,8 +225,8 @@ function createOverviewSheet(workbook: ExcelJS.Workbook, data: XlsxData): void {
   // 헤더
   sheet.getCell("B2").value = "속성";
   sheet.getCell("C2").value = "값";
-  applyStyle(sheet.getCell("B2"), HEADER_STYLE);
-  applyStyle(sheet.getCell("C2"), HEADER_STYLE);
+  applyStyle(sheet.getCell("B2"), PRIMARY_HEADER_STYLE);
+  applyStyle(sheet.getCell("C2"), PRIMARY_HEADER_STYLE);
 
   // 데이터
   const rows = [
@@ -216,10 +240,12 @@ function createOverviewSheet(workbook: ExcelJS.Workbook, data: XlsxData): void {
     const rowNum = index + 3;
     sheet.getCell(`B${rowNum}`).value = row[0];
     sheet.getCell(`C${rowNum}`).value = row[1];
-    applyStyle(sheet.getCell(`B${rowNum}`), LABEL_STYLE);
+    applyStyle(sheet.getCell(`B${rowNum}`), PRIMARY_LABEL_STYLE);
     applyStyle(sheet.getCell(`C${rowNum}`), VALUE_STYLE);
   });
 
+  const endRow = 2 + rows.length;
+  applyBlockOutline(sheet, 2, endRow, "B", "C");
 }
 
 /**
@@ -250,10 +276,12 @@ function createAuthSheet(workbook: ExcelJS.Workbook, schemes: SecuritySchemeInfo
 
   if (schemes.length === 0) {
     sheet.getCell(`B${currentRow}`).value = "정의된 인증 스키마가 없습니다.";
+    applyBlockOutline(sheet, currentRow, currentRow, "B", "C");
     return;
   }
 
   for (const scheme of schemes) {
+    const blockStartRow = currentRow;
     // 스키마 이름 헤더
     sheet.getCell(`B${currentRow}`).value = scheme.name;
     applyStyle(sheet.getCell(`B${currentRow}`), SECTION_HEADER_STYLE);
@@ -277,6 +305,8 @@ function createAuthSheet(workbook: ExcelJS.Workbook, schemes: SecuritySchemeInfo
       currentRow++;
     }
 
+    const blockEndRow = currentRow - 1;
+    applyBlockOutline(sheet, blockStartRow, blockEndRow, "B", "C");
     currentRow += 2; // 섹션 간 여백
   }
 }
@@ -317,7 +347,7 @@ function createEndpointsSheet(workbook: ExcelJS.Workbook, endpoints: EndpointInf
   sheet.getCell("C2").value = "경로";
   sheet.getCell("D2").value = "요약";
   for (const cell of ["B2", "C2", "D2"]) {
-    applyStyle(sheet.getCell(cell), HEADER_STYLE);
+    applyStyle(sheet.getCell(cell), PRIMARY_HEADER_STYLE);
   }
 
   // 데이터
@@ -420,32 +450,38 @@ function writeEndpointDetail(
 ): number {
   let row = startRow;
 
-  // 경로 헤더
-  sheet.getCell(`B${row}`).value = endpoint.path;
-  applyStyle(sheet.getCell(`B${row}`), SECTION_HEADER_STYLE);
-  sheet.mergeCells(`B${row}:F${row}`);
+  // 기본 정보 (메서드/엔드포인트/요약/설명/서버)
+  sheet.getCell(`B${row}`).value = "메서드";
+  sheet.getCell(`C${row}`).value = endpoint.method;
+  sheet.getCell(`D${row}`).value = "엔드포인트";
+  sheet.getCell(`E${row}`).value = endpoint.path;
+  applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_STYLE);
+  applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
+  applyStyle(sheet.getCell(`D${row}`), PRIMARY_LABEL_STYLE);
+  applyStyle(sheet.getCell(`E${row}`), VALUE_STYLE);
+  sheet.mergeCells(`E${row}:F${row}`);
   row++;
 
-  // 기본 정보
-  const basicInfo: [string, string][] = [
-    ["메서드", endpoint.method],
-    ["요약", endpoint.summary],
-    ["설명", endpoint.description],
-    [
-      "개발 서버",
-      data.meta.servers[0] ? `${data.meta.servers[0].url}${endpoint.path}` : endpoint.path,
-    ],
-  ];
+  const writeMergedRow = (label: string, value: string): void => {
+    sheet.getCell(`B${row}`).value = label;
+    sheet.getCell(`C${row}`).value = value;
+    applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_STYLE);
+    applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
+    sheet.mergeCells(`C${row}:F${row}`);
+    row++;
+  };
 
-  for (const [label, value] of basicInfo) {
-    if (value) {
-      sheet.getCell(`B${row}`).value = label;
-      sheet.getCell(`C${row}`).value = value;
-      applyStyle(sheet.getCell(`B${row}`), LABEL_STYLE);
-      applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
-      sheet.mergeCells(`C${row}:F${row}`);
-      row++;
-    }
+  if (endpoint.summary) {
+    writeMergedRow("요약", endpoint.summary);
+  }
+
+  if (endpoint.description) {
+    writeMergedRow("설명", endpoint.description);
+  }
+
+  const serverRows = resolveServerRows(data.meta.servers, endpoint.path);
+  for (const serverRow of serverRows) {
+    writeMergedRow(serverRow.label, serverRow.value);
   }
 
   // 파라미터 섹션 (기본 정보 바로 다음에 시작)
@@ -631,6 +667,73 @@ function applyStyle(cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>): void {
   if (style.fill) cell.fill = style.fill as ExcelJS.Fill;
   if (style.alignment) cell.alignment = style.alignment;
   if (style.border) cell.border = style.border;
+}
+
+function resolveServerRows(
+  servers: { url: string; description?: string }[],
+  endpointPath: string
+): { label: string; value: string }[] {
+  if (servers.length === 0) {
+    return [];
+  }
+
+  const normalized = servers.map((server) => ({
+    ...server,
+    endpointUrl: buildEndpointUrl(server.url, endpointPath),
+    descriptor: `${server.description ?? ""} ${server.url}`.toLowerCase(),
+  }));
+
+  const devKeywords = ["dev", "development", "staging", "local", "localhost", "test", "qa", "sandbox", "개발", "스테이징", "테스트"];
+  const prodKeywords = ["prod", "production", "live", "운영"];
+
+  const devIndex = findServerIndex(normalized, devKeywords);
+  const prodIndex = findServerIndex(normalized, prodKeywords);
+
+  const used = new Set<number>();
+  const rows: { label: string; value: string }[] = [];
+
+  const resolvedDevIndex = devIndex >= 0 ? devIndex : 0;
+  if (resolvedDevIndex >= 0) {
+    rows.push({ label: "개발 서버", value: normalized[resolvedDevIndex].endpointUrl });
+    used.add(resolvedDevIndex);
+  }
+
+  let resolvedProdIndex = prodIndex;
+  if (resolvedProdIndex < 0) {
+    resolvedProdIndex = normalized.findIndex((_, index) => !used.has(index));
+  }
+
+  if (resolvedProdIndex >= 0) {
+    rows.push({ label: "운영 서버", value: normalized[resolvedProdIndex].endpointUrl });
+    used.add(resolvedProdIndex);
+  }
+
+  const extras = normalized.filter((_, index) => !used.has(index));
+  extras.forEach((server, index) => {
+    const label = server.description ? `추가 서버 (${server.description})` : `추가 서버 ${index + 1}`;
+    rows.push({ label, value: server.endpointUrl });
+  });
+
+  return rows;
+}
+
+function findServerIndex(
+  servers: { descriptor: string }[],
+  keywords: string[]
+): number {
+  return servers.findIndex((server) => keywords.some((keyword) => server.descriptor.includes(keyword)));
+}
+
+function buildEndpointUrl(baseUrl: string, endpointPath: string): string {
+  if (!baseUrl) {
+    return endpointPath;
+  }
+  if (!endpointPath) {
+    return baseUrl;
+  }
+  const trimmedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const trimmedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+  return `${trimmedBase}${trimmedPath}`;
 }
 
 /**
