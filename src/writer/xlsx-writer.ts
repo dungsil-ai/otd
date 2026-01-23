@@ -35,55 +35,45 @@ const HEADER_STYLE: Partial<ExcelJS.Style> = {
   },
 };
 
-/** 섹션 헤더 스타일 (테두리는 applyBlockOutline에서 적용) */
+/** 섹션 헤더 스타일 */
 const SECTION_HEADER_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true, size: 12 },
   fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
   alignment: { vertical: "middle" },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
 };
 
-/** 라벨 스타일 (테두리는 applyBlockOutline에서 적용) */
+/** 라벨 스타일 */
 const LABEL_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true },
   alignment: { vertical: "top" },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
 };
 
-/** 값 스타일 (테두리는 applyBlockOutline에서 적용) */
+/** 값 스타일 */
 const VALUE_STYLE: Partial<ExcelJS.Style> = {
   alignment: { vertical: "top", wrapText: true },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
 };
 
-/** 테이블 셀 스타일 (테두리는 applyBlockOutline에서 적용) */
+/** 테이블 셀 스타일 */
 const CELL_STYLE: Partial<ExcelJS.Style> = {
   alignment: { vertical: "top", wrapText: true },
-};
-
-/** 개요/인증 시트용 스타일 (테두리 포함) */
-const OVERVIEW_LABEL_STYLE: Partial<ExcelJS.Style> = {
-  font: { bold: true },
-  alignment: { vertical: "top" },
-  border: {
-    top: { style: "thin" },
-    left: { style: "thin" },
-    bottom: { style: "thin" },
-    right: { style: "thin" },
-  },
-};
-
-const OVERVIEW_VALUE_STYLE: Partial<ExcelJS.Style> = {
-  alignment: { vertical: "top", wrapText: true },
-  border: {
-    top: { style: "thin" },
-    left: { style: "thin" },
-    bottom: { style: "thin" },
-    right: { style: "thin" },
-  },
-};
-
-const OVERVIEW_SECTION_STYLE: Partial<ExcelJS.Style> = {
-  font: { bold: true, size: 12 },
-  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
-  alignment: { vertical: "middle" },
   border: {
     top: { style: "thin" },
     left: { style: "thin" },
@@ -226,8 +216,8 @@ function createOverviewSheet(workbook: ExcelJS.Workbook, data: XlsxData): void {
     const rowNum = index + 3;
     sheet.getCell(`B${rowNum}`).value = row[0];
     sheet.getCell(`C${rowNum}`).value = row[1];
-    applyStyle(sheet.getCell(`B${rowNum}`), OVERVIEW_LABEL_STYLE);
-    applyStyle(sheet.getCell(`C${rowNum}`), OVERVIEW_VALUE_STYLE);
+    applyStyle(sheet.getCell(`B${rowNum}`), LABEL_STYLE);
+    applyStyle(sheet.getCell(`C${rowNum}`), VALUE_STYLE);
   });
 
 }
@@ -266,7 +256,7 @@ function createAuthSheet(workbook: ExcelJS.Workbook, schemes: SecuritySchemeInfo
   for (const scheme of schemes) {
     // 스키마 이름 헤더
     sheet.getCell(`B${currentRow}`).value = scheme.name;
-    applyStyle(sheet.getCell(`B${currentRow}`), OVERVIEW_SECTION_STYLE);
+    applyStyle(sheet.getCell(`B${currentRow}`), SECTION_HEADER_STYLE);
     sheet.mergeCells(`B${currentRow}:C${currentRow}`);
     currentRow++;
 
@@ -282,8 +272,8 @@ function createAuthSheet(workbook: ExcelJS.Workbook, schemes: SecuritySchemeInfo
     for (const [label, value] of details) {
       sheet.getCell(`B${currentRow}`).value = label;
       sheet.getCell(`C${currentRow}`).value = value;
-      applyStyle(sheet.getCell(`B${currentRow}`), OVERVIEW_LABEL_STYLE);
-      applyStyle(sheet.getCell(`C${currentRow}`), OVERVIEW_VALUE_STYLE);
+      applyStyle(sheet.getCell(`B${currentRow}`), LABEL_STYLE);
+      applyStyle(sheet.getCell(`C${currentRow}`), VALUE_STYLE);
       currentRow++;
     }
 
@@ -337,11 +327,20 @@ function createEndpointsSheet(workbook: ExcelJS.Workbook, endpoints: EndpointInf
     sheet.getCell(`C${rowNum}`).value = endpoint.path;
     sheet.getCell(`D${rowNum}`).value = endpoint.summary;
 
+    // 셀 스타일 적용
+    applyStyle(sheet.getCell(`C${rowNum}`), CELL_STYLE);
+    applyStyle(sheet.getCell(`D${rowNum}`), CELL_STYLE);
+
     // 메서드별 색상
     applyMethodColor(sheet.getCell(`B${rowNum}`), endpoint.method);
     rowNum++;
   }
 
+  const startRow = 2;
+  const endRow = rowNum - 1;
+  if (endRow >= startRow) {
+    applyBlockOutline(sheet, startRow, endRow, "B", "D");
+  }
 }
 
 /**
@@ -360,6 +359,12 @@ function applyMethodColor(cell: ExcelJS.Cell, method: string): void {
   cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
   cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: color } };
   cell.alignment = { horizontal: "center" };
+  cell.border = {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  };
 }
 
 // ============================================================================
@@ -640,42 +645,117 @@ function applyBlockOutline(
   startCol: string,
   endCol: string
 ): void {
-  const columns = ["B", "C", "D", "E", "F"];
-  const startColIndex = columns.indexOf(startCol);
-  const endColIndex = columns.indexOf(endCol);
+  const columns = buildColumnRange(startCol, endCol);
+  if (columns.length === 0) {
+    return;
+  }
+  const leftCol = columns[0];
+  const rightCol = columns[columns.length - 1];
 
+  // 먼저 모든 행을 순회하면서 외곽 테두리 적용
   for (let r = startRow; r <= endRow; r++) {
-    for (let c = startColIndex; c <= endColIndex; c++) {
+    const isTopRow = r === startRow;
+    const isBottomRow = r === endRow;
+
+    if (columns.length === 1) {
+      const cell = sheet.getCell(`${leftCol}${r}`);
+      cell.border = {
+        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
+        left: THICK_BORDER.left,
+        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
+        right: THICK_BORDER.right,
+      };
+      continue;
+    }
+
+    const leftCell = sheet.getCell(`${leftCol}${r}`);
+    const rightCell = sheet.getCell(`${rightCol}${r}`);
+    const leftMaster = leftCell.isMerged ? leftCell.master : leftCell;
+    const rightMaster = rightCell.isMerged ? rightCell.master : rightCell;
+
+    if (leftMaster.address === rightMaster.address) {
+      leftMaster.border = {
+        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
+        left: THICK_BORDER.left,
+        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
+        right: THICK_BORDER.right,
+      };
+      continue;
+    }
+
+    leftMaster.border = {
+      top: isTopRow ? THICK_BORDER.top : { style: "thin" },
+      left: THICK_BORDER.left, // 항상 굵은 왼쪽 테두리
+      bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
+      right: { style: "thin" },
+    };
+
+    rightMaster.border = {
+      top: isTopRow ? THICK_BORDER.top : { style: "thin" },
+      left: { style: "thin" },
+      bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
+      right: THICK_BORDER.right, // 항상 굵은 오른쪽 테두리
+    };
+
+    const skipMasters = new Set([leftMaster.address, rightMaster.address]);
+    const processedMasters = new Set<string>();
+
+    // 중간 셀들에 상하 테두리만 적용
+    for (let c = 1; c < columns.length - 1; c++) {
       const col = columns[c];
       const cell = sheet.getCell(`${col}${r}`);
+      const master = cell.isMerged ? cell.master : cell;
+      if (skipMasters.has(master.address) || processedMasters.has(master.address)) {
+        continue;
+      }
 
-      // 모든 셀에 기본 테두리 적용 (빈 셀 포함)
-      const newBorder: Partial<ExcelJS.Borders> = {
-        top: { style: "thin" },
+      const middleBorder: Partial<ExcelJS.Borders> = {
+        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
         left: { style: "thin" },
-        bottom: { style: "thin" },
+        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
         right: { style: "thin" },
       };
-
-      // 외곽에는 굵은 테두리로 덮어씌우기
-      // 첫 번째 행: 위쪽 굵은 테두리
-      if (r === startRow) {
-        newBorder.top = THICK_BORDER.top;
-      }
-      // 마지막 행: 아래쪽 굵은 테두리
-      if (r === endRow) {
-        newBorder.bottom = THICK_BORDER.bottom;
-      }
-      // 첫 번째 열: 왼쪽 굵은 테두리
-      if (c === startColIndex) {
-        newBorder.left = THICK_BORDER.left;
-      }
-      // 마지막 열: 오른쪽 굵은 테두리
-      if (c === endColIndex) {
-        newBorder.right = THICK_BORDER.right;
-      }
-
-      cell.border = newBorder;
+      master.border = middleBorder;
+      processedMasters.add(master.address);
     }
   }
+}
+
+function buildColumnRange(startCol: string, endCol: string): string[] {
+  const start = columnToNumber(startCol);
+  const end = columnToNumber(endCol);
+  if (start === 0 || end === 0) {
+    return [];
+  }
+
+  const columns: string[] = [];
+  const step = start <= end ? 1 : -1;
+  for (let i = start; step > 0 ? i <= end : i >= end; i += step) {
+    columns.push(numberToColumn(i));
+  }
+  return columns;
+}
+
+function columnToNumber(column: string): number {
+  let num = 0;
+  const normalized = column.toUpperCase();
+  for (let i = 0; i < normalized.length; i++) {
+    const code = normalized.charCodeAt(i);
+    if (code < 65 || code > 90) {
+      continue;
+    }
+    num = num * 26 + (code - 64);
+  }
+  return num;
+}
+
+function numberToColumn(columnNumber: number): string {
+  let num = columnNumber;
+  let col = "";
+  while (num > 0) {
+    const remainder = (num - 1) % 26;
+    col = String.fromCharCode(65 + remainder) + col;
+    num = Math.floor((num - 1) / 26);
+  }
+  return col || "A";
 }
