@@ -1,0 +1,6 @@
+openapi: "3.0.3"
+info:
+  title: No Paths API
+  version: "1.0.0"
+  description: paths가 비어 있는 최소 OpenAPI 문서
+paths: {}

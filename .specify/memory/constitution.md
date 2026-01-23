@@ -1,158 +1,50 @@
-<!--
-=============================================================================
-SYNC IMPACT REPORT
-=============================================================================
-Version Change: N/A → 1.0.0 (Initial)
-Bump Rationale: Initial constitution creation - MAJOR version 1.0.0
-
-Modified Principles: None (initial creation)
-
-Added Sections:
-- Core Principles (4 principles)
-  - I. Code Quality
-  - II. Testing Standards
-  - III. User Experience Consistency
-  - IV. Performance Requirements
-- Development Standards (Section 2)
-- Quality Gates & Review Process (Section 3)
-- Governance
-
-Removed Sections: None
-
-Templates Requiring Updates:
-- plan-template.md: ✅ No changes required (Constitution Check section already generic)
-- spec-template.md: ✅ No changes required (compatible with principles)
-- tasks-template.md: ✅ No changes required (supports test-driven approach)
-
-Follow-up TODOs: None
-=============================================================================
--->
-
-# OpenAPI to ODF Constitution
+# [PROJECT_NAME] Constitution
+<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
 
 ## Core Principles
 
-### I. Code Quality
+### [PRINCIPLE_1_NAME]
+<!-- Example: I. Library-First -->
+[PRINCIPLE_1_DESCRIPTION]
+<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
 
-모든 코드는 명확성, 유지보수성, 확장성을 최우선으로 한다.
+### [PRINCIPLE_2_NAME]
+<!-- Example: II. CLI Interface -->
+[PRINCIPLE_2_DESCRIPTION]
+<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
 
-- **명확한 책임 분리**: 각 모듈, 클래스, 함수는 단일 책임 원칙(SRP)을 준수해야 한다
-- **일관된 코드 스타일**: 프로젝트 전반에 걸쳐 린터와 포매터 규칙을 엄격히 적용해야 한다
-- **문서화 의무**: 모든 공개 API와 복잡한 로직은 반드시 문서화해야 한다
-- **의존성 최소화**: 외부 의존성은 필요성이 명확히 검증된 경우에만 추가한다
-- **코드 중복 금지**: DRY(Don't Repeat Yourself) 원칙을 엄격히 적용한다
+### [PRINCIPLE_3_NAME]
+<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
+[PRINCIPLE_3_DESCRIPTION]
+<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
 
-**근거**: OpenAPI 문서 변환 도구로서 다양한 스키마와 형식을 처리해야 하므로, 코드의 명확성과 유지보수성이 장기적인 품질 유지에 핵심적이다.
+### [PRINCIPLE_4_NAME]
+<!-- Example: IV. Integration Testing -->
+[PRINCIPLE_4_DESCRIPTION]
+<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
 
-### II. Testing Standards
+### [PRINCIPLE_5_NAME]
+<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
+[PRINCIPLE_5_DESCRIPTION]
+<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
 
-테스트는 기능 구현의 필수 전제조건이다.
+## [SECTION_2_NAME]
+<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
 
-- **테스트 우선 개발**: 새로운 기능은 반드시 테스트 케이스를 먼저 작성한 후 구현한다
-- **계층별 테스트**: 단위 테스트, 통합 테스트, 계약 테스트를 계층적으로 구성한다
-  - 단위 테스트: 개별 함수/메서드의 동작 검증
-  - 통합 테스트: 모듈 간 상호작용 검증
-  - 계약 테스트: API 인터페이스 명세 준수 검증
-- **테스트 커버리지**: 핵심 비즈니스 로직은 최소 80% 이상의 커버리지를 유지해야 한다
-- **경계 조건 테스트**: 엣지 케이스와 오류 시나리오에 대한 테스트를 반드시 포함한다
-- **회귀 테스트**: 버그 수정 시 해당 버그를 재현하는 테스트를 반드시 추가한다
+[SECTION_2_CONTENT]
+<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
 
-**근거**: OpenAPI 스키마의 다양한 변형과 엣지 케이스를 안정적으로 처리하기 위해 철저한 테스트가 필수적이다.
+## [SECTION_3_NAME]
+<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
 
-### III. User Experience Consistency
-
-사용자 경험은 모든 인터페이스에서 일관되고 예측 가능해야 한다.
-
-- **일관된 CLI 인터페이스**: 모든 명령어는 동일한 패턴과 옵션 구조를 따른다
-- **명확한 오류 메시지**: 오류 발생 시 원인과 해결 방법을 명확히 제시한다
-- **진행 상황 표시**: 장시간 작업은 진행 상황을 사용자에게 표시한다
-- **출력 형식 지원**: JSON, 텍스트 등 다양한 출력 형식을 일관되게 지원한다
-- **예측 가능한 동작**: 동일한 입력에 대해 항상 동일한 결과를 보장한다
-
-**근거**: 문서 변환 도구는 자동화 파이프라인에 통합되는 경우가 많으므로, 예측 가능하고 일관된 동작이 필수적이다.
-
-### IV. Performance Requirements
-
-성능은 사용자 경험의 핵심 요소이다.
-
-- **응답 시간 기준**: 일반적인 OpenAPI 문서(1MB 이하)는 10초 이내에 변환을 완료해야 한다
-- **메모리 효율성**: 대용량 문서 처리 시 메모리 사용량을 최적화하여 시스템 리소스를 과도하게 소비하지 않는다
-- **스트리밍 처리**: 가능한 경우 스트리밍 방식으로 처리하여 메모리 사용을 최소화한다
-- **병렬 처리 지원**: 독립적인 변환 작업은 병렬로 처리할 수 있어야 한다
-- **성능 측정**: 주요 작업의 성능을 측정하고 모니터링할 수 있는 수단을 제공한다
-
-**근거**: CI/CD 파이프라인에서 사용될 때 빌드 시간에 영향을 주므로, 성능 최적화는 실질적인 사용성에 직접 영향을 미친다.
-
-## Development Standards
-
-개발 과정에서 준수해야 할 기술적 표준을 정의한다.
-
-### 코드 작성 표준
-
-- **언어 규약 준수**: 사용 언어의 공식 스타일 가이드를 따른다
-- **네이밍 규칙**: 의미 있고 일관된 명명 규칙을 적용한다
-- **주석 정책**: 코드 자체로 설명이 불가능한 경우에만 주석을 사용한다
-- **에러 처리**: 모든 예외는 적절히 처리하고 로깅한다
-
-### 버전 관리 표준
-
-- **커밋 메시지**: Conventional Commits 규칙을 따른다
-- **브랜치 전략**: 기능별 브랜치를 사용하고 main 브랜치는 항상 배포 가능 상태를 유지한다
-- **시맨틱 버저닝**: MAJOR.MINOR.PATCH 형식을 따르며, 호환성 파괴 변경은 MAJOR 버전 증가
-
-### 의존성 관리
-
-- **버전 고정**: 모든 의존성은 정확한 버전을 명시한다
-- **정기 업데이트**: 보안 패치는 즉시, 일반 업데이트는 월간 검토
-- **의존성 최소화**: 새 의존성 추가 시 필요성을 문서화하고 대안을 검토한다
-
-## Quality Gates & Review Process
-
-코드가 프로덕션에 반영되기 전 통과해야 하는 품질 관문을 정의한다.
-
-### 코드 리뷰 요구사항
-
-- 모든 변경사항은 최소 1명의 리뷰어 승인을 받아야 한다
-- 리뷰어는 코드 품질, 테스트 적정성, 성능 영향을 검토한다
-- 리뷰 의견은 24시간 이내에 응답한다
-
-### 자동화 품질 검사
-
-- **린트 검사**: 모든 코드는 린터를 통과해야 한다
-- **테스트 통과**: 모든 테스트가 통과해야 한다
-- **빌드 성공**: 전체 빌드가 성공해야 한다
-- **정적 분석**: 정적 분석 도구의 경고가 없어야 한다
-
-### 릴리스 전 체크리스트
-
-- [ ] 모든 테스트 통과
-- [ ] 코드 리뷰 완료
-- [ ] 문서 업데이트 완료
-- [ ] 성능 회귀 없음 확인
-- [ ] CHANGELOG 업데이트
+[SECTION_3_CONTENT]
+<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
 
 ## Governance
+<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-이 헌법은 프로젝트의 모든 개발 활동에 우선하며, 모든 참여자는 이를 준수해야 한다.
+[GOVERNANCE_RULES]
+<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
 
-### 수정 절차
-
-1. 수정 제안서 작성 및 제출
-2. 이해관계자 검토 (최소 7일)
-3. 합의 도출 및 승인
-4. 헌법 업데이트 및 버전 증가
-5. 관련 템플릿 및 문서 동기화
-
-### 버전 정책
-
-- **MAJOR**: 원칙의 삭제 또는 근본적 재정의
-- **MINOR**: 새로운 원칙/섹션 추가 또는 기존 지침의 실질적 확장
-- **PATCH**: 명확화, 문구 수정, 오타 교정
-
-### 준수 검토
-
-- 모든 PR/MR은 헌법 준수 여부를 검토한다
-- 분기별로 헌법 준수 현황을 점검한다
-- 위반 사항은 문서화하고 시정 계획을 수립한다
-
-**Version**: 1.0.0 | **Ratified**: 2026-01-06 | **Last Amended**: 2026-01-06
+**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
+<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->

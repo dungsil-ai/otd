@@ -1,0 +1,13 @@
+openapi: "3.0.3"
+info:
+  title: Minimal API
+  version: "1.0.0"
+  description: 최소 테스트용 OpenAPI 문서
+paths:
+  /health:
+    get:
+      summary: 상태 확인
+      description: API 서버의 상태를 확인합니다.
+      responses:
+        "200":
+          description: 정상

@@ -1,3 +1,30 @@
-﻿.idea/
-target/
+# IDE
+.idea/
+.vscode/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Generated files
 *.xlsx
+
+# Logs
+*.log
+
+# Environment
+.env*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bun
+bun.lockb
+
+# Test output
+coverage/

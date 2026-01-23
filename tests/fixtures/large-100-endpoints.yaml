@@ -1,0 +1,1227 @@
+openapi: 3.0.3
+info:
+  title: Large API (100 Endpoints)
+  version: 1.0.0
+  description: 성능 테스트용 대규모 API 문서 (100개 엔드포인트)
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production Server
+
+tags:
+  - name: users
+    description: 사용자 관련 API
+  - name: products
+    description: 상품 관련 API
+  - name: orders
+    description: 주문 관련 API
+  - name: payments
+    description: 결제 관련 API
+  - name: notifications
+    description: 알림 관련 API
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        price:
+          type: number
+        category:
+          type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, shipped, delivered, cancelled]
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              productId:
+                type: integer
+              quantity:
+                type: integer
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+paths:
+  # Users - 20 endpoints
+  /users:
+    get:
+      tags: [users]
+      summary: 사용자 목록 조회
+      operationId: listUsers
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+    post:
+      tags: [users]
+      summary: 사용자 생성
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: 생성됨
+  /users/{id}:
+    get:
+      tags: [users]
+      summary: 사용자 상세 조회
+      operationId: getUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [users]
+      summary: 사용자 정보 수정
+      operationId: updateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [users]
+      summary: 사용자 삭제
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /users/{id}/profile:
+    get:
+      tags: [users]
+      summary: 사용자 프로필 조회
+      operationId: getUserProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [users]
+      summary: 사용자 프로필 수정
+      operationId: updateUserProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /users/{id}/avatar:
+    get:
+      tags: [users]
+      summary: 사용자 아바타 조회
+      operationId: getUserAvatar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [users]
+      summary: 사용자 아바타 업로드
+      operationId: uploadUserAvatar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [users]
+      summary: 사용자 아바타 삭제
+      operationId: deleteUserAvatar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /users/{id}/settings:
+    get:
+      tags: [users]
+      summary: 사용자 설정 조회
+      operationId: getUserSettings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    patch:
+      tags: [users]
+      summary: 사용자 설정 일부 수정
+      operationId: patchUserSettings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /users/{id}/notifications:
+    get:
+      tags: [users]
+      summary: 사용자 알림 목록
+      operationId: getUserNotifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /users/{id}/orders:
+    get:
+      tags: [users]
+      summary: 사용자 주문 목록
+      operationId: getUserOrders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /users/{id}/favorites:
+    get:
+      tags: [users]
+      summary: 사용자 즐겨찾기 목록
+      operationId: getUserFavorites
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [users]
+      summary: 즐겨찾기 추가
+      operationId: addUserFavorite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 추가됨
+  /users/{id}/cart:
+    get:
+      tags: [users]
+      summary: 장바구니 조회
+      operationId: getUserCart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [users]
+      summary: 장바구니 비우기
+      operationId: clearUserCart
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+
+  # Products - 20 endpoints
+  /products:
+    get:
+      tags: [products]
+      summary: 상품 목록 조회
+      operationId: listProducts
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [products]
+      summary: 상품 등록
+      operationId: createProduct
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: 생성됨
+  /products/{id}:
+    get:
+      tags: [products]
+      summary: 상품 상세 조회
+      operationId: getProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [products]
+      summary: 상품 정보 수정
+      operationId: updateProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [products]
+      summary: 상품 삭제
+      operationId: deleteProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /products/{id}/reviews:
+    get:
+      tags: [products]
+      summary: 상품 리뷰 목록
+      operationId: getProductReviews
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [products]
+      summary: 상품 리뷰 작성
+      operationId: createProductReview
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 생성됨
+  /products/{id}/images:
+    get:
+      tags: [products]
+      summary: 상품 이미지 목록
+      operationId: getProductImages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [products]
+      summary: 상품 이미지 업로드
+      operationId: uploadProductImage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 업로드됨
+  /products/{id}/inventory:
+    get:
+      tags: [products]
+      summary: 재고 조회
+      operationId: getProductInventory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [products]
+      summary: 재고 수정
+      operationId: updateProductInventory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /products/categories:
+    get:
+      tags: [products]
+      summary: 카테고리 목록
+      operationId: listCategories
+      responses:
+        '200':
+          description: 성공
+  /products/featured:
+    get:
+      tags: [products]
+      summary: 추천 상품 목록
+      operationId: listFeaturedProducts
+      responses:
+        '200':
+          description: 성공
+  /products/bestsellers:
+    get:
+      tags: [products]
+      summary: 베스트셀러 목록
+      operationId: listBestsellers
+      responses:
+        '200':
+          description: 성공
+  /products/new-arrivals:
+    get:
+      tags: [products]
+      summary: 신상품 목록
+      operationId: listNewArrivals
+      responses:
+        '200':
+          description: 성공
+  /products/search:
+    get:
+      tags: [products]
+      summary: 상품 검색
+      operationId: searchProducts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 성공
+  /products/{id}/related:
+    get:
+      tags: [products]
+      summary: 관련 상품 목록
+      operationId: getRelatedProducts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /products/{id}/variants:
+    get:
+      tags: [products]
+      summary: 상품 옵션 목록
+      operationId: getProductVariants
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+
+  # Orders - 20 endpoints
+  /orders:
+    get:
+      tags: [orders]
+      summary: 주문 목록 조회
+      operationId: listOrders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [orders]
+      summary: 주문 생성
+      operationId: createOrder
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        '201':
+          description: 생성됨
+  /orders/{id}:
+    get:
+      tags: [orders]
+      summary: 주문 상세 조회
+      operationId: getOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [orders]
+      summary: 주문 수정
+      operationId: updateOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [orders]
+      summary: 주문 취소
+      operationId: cancelOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 취소됨
+  /orders/{id}/items:
+    get:
+      tags: [orders]
+      summary: 주문 항목 목록
+      operationId: getOrderItems
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [orders]
+      summary: 주문 항목 추가
+      operationId: addOrderItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 추가됨
+  /orders/{id}/items/{itemId}:
+    put:
+      tags: [orders]
+      summary: 주문 항목 수정
+      operationId: updateOrderItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [orders]
+      summary: 주문 항목 삭제
+      operationId: deleteOrderItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /orders/{id}/status:
+    get:
+      tags: [orders]
+      summary: 주문 상태 조회
+      operationId: getOrderStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [orders]
+      summary: 주문 상태 변경
+      operationId: updateOrderStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /orders/{id}/shipping:
+    get:
+      tags: [orders]
+      summary: 배송 정보 조회
+      operationId: getOrderShipping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [orders]
+      summary: 배송 정보 수정
+      operationId: updateOrderShipping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /orders/{id}/tracking:
+    get:
+      tags: [orders]
+      summary: 배송 추적
+      operationId: trackOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /orders/{id}/invoice:
+    get:
+      tags: [orders]
+      summary: 주문서 조회
+      operationId: getOrderInvoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /orders/{id}/refund:
+    post:
+      tags: [orders]
+      summary: 환불 요청
+      operationId: requestOrderRefund
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 요청됨
+  /orders/{id}/receipt:
+    get:
+      tags: [orders]
+      summary: 영수증 조회
+      operationId: getOrderReceipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /orders/stats:
+    get:
+      tags: [orders]
+      summary: 주문 통계
+      operationId: getOrderStats
+      responses:
+        '200':
+          description: 성공
+  /orders/export:
+    get:
+      tags: [orders]
+      summary: 주문 내보내기
+      operationId: exportOrders
+      responses:
+        '200':
+          description: 성공
+
+  # Payments - 20 endpoints
+  /payments:
+    get:
+      tags: [payments]
+      summary: 결제 목록 조회
+      operationId: listPayments
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [payments]
+      summary: 결제 생성
+      operationId: createPayment
+      responses:
+        '201':
+          description: 생성됨
+  /payments/{id}:
+    get:
+      tags: [payments]
+      summary: 결제 상세 조회
+      operationId: getPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [payments]
+      summary: 결제 취소
+      operationId: cancelPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 취소됨
+  /payments/{id}/confirm:
+    post:
+      tags: [payments]
+      summary: 결제 확인
+      operationId: confirmPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 확인됨
+  /payments/{id}/capture:
+    post:
+      tags: [payments]
+      summary: 결제 캡처
+      operationId: capturePayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 캡처됨
+  /payments/{id}/refund:
+    post:
+      tags: [payments]
+      summary: 결제 환불
+      operationId: refundPayment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: 환불됨
+  /payments/{id}/receipt:
+    get:
+      tags: [payments]
+      summary: 결제 영수증
+      operationId: getPaymentReceipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /payments/methods:
+    get:
+      tags: [payments]
+      summary: 결제 수단 목록
+      operationId: listPaymentMethods
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [payments]
+      summary: 결제 수단 추가
+      operationId: addPaymentMethod
+      responses:
+        '201':
+          description: 추가됨
+  /payments/methods/{id}:
+    get:
+      tags: [payments]
+      summary: 결제 수단 상세
+      operationId: getPaymentMethod
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [payments]
+      summary: 결제 수단 삭제
+      operationId: deletePaymentMethod
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /payments/cards:
+    get:
+      tags: [payments]
+      summary: 카드 목록
+      operationId: listCards
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [payments]
+      summary: 카드 등록
+      operationId: registerCard
+      responses:
+        '201':
+          description: 등록됨
+  /payments/cards/{id}:
+    get:
+      tags: [payments]
+      summary: 카드 상세
+      operationId: getCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [payments]
+      summary: 카드 삭제
+      operationId: deleteCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /payments/history:
+    get:
+      tags: [payments]
+      summary: 결제 내역
+      operationId: getPaymentHistory
+      responses:
+        '200':
+          description: 성공
+  /payments/stats:
+    get:
+      tags: [payments]
+      summary: 결제 통계
+      operationId: getPaymentStats
+      responses:
+        '200':
+          description: 성공
+  /payments/export:
+    get:
+      tags: [payments]
+      summary: 결제 내역 내보내기
+      operationId: exportPayments
+      responses:
+        '200':
+          description: 성공
+
+  # Notifications - 20 endpoints
+  /notifications:
+    get:
+      tags: [notifications]
+      summary: 알림 목록 조회
+      operationId: listNotifications
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [notifications]
+      summary: 알림 생성
+      operationId: createNotification
+      responses:
+        '201':
+          description: 생성됨
+  /notifications/{id}:
+    get:
+      tags: [notifications]
+      summary: 알림 상세 조회
+      operationId: getNotification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [notifications]
+      summary: 알림 삭제
+      operationId: deleteNotification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨
+  /notifications/{id}/read:
+    post:
+      tags: [notifications]
+      summary: 알림 읽음 처리
+      operationId: markNotificationRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+  /notifications/mark-all-read:
+    post:
+      tags: [notifications]
+      summary: 모든 알림 읽음 처리
+      operationId: markAllNotificationsRead
+      responses:
+        '200':
+          description: 성공
+  /notifications/unread:
+    get:
+      tags: [notifications]
+      summary: 읽지 않은 알림 목록
+      operationId: listUnreadNotifications
+      responses:
+        '200':
+          description: 성공
+  /notifications/unread/count:
+    get:
+      tags: [notifications]
+      summary: 읽지 않은 알림 수
+      operationId: getUnreadNotificationCount
+      responses:
+        '200':
+          description: 성공
+  /notifications/settings:
+    get:
+      tags: [notifications]
+      summary: 알림 설정 조회
+      operationId: getNotificationSettings
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [notifications]
+      summary: 알림 설정 수정
+      operationId: updateNotificationSettings
+      responses:
+        '200':
+          description: 성공
+  /notifications/preferences:
+    get:
+      tags: [notifications]
+      summary: 알림 환경설정 조회
+      operationId: getNotificationPreferences
+      responses:
+        '200':
+          description: 성공
+    patch:
+      tags: [notifications]
+      summary: 알림 환경설정 수정
+      operationId: patchNotificationPreferences
+      responses:
+        '200':
+          description: 성공
+  /notifications/channels:
+    get:
+      tags: [notifications]
+      summary: 알림 채널 목록
+      operationId: listNotificationChannels
+      responses:
+        '200':
+          description: 성공
+  /notifications/channels/{channel}:
+    get:
+      tags: [notifications]
+      summary: 알림 채널 상세
+      operationId: getNotificationChannel
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 성공
+    put:
+      tags: [notifications]
+      summary: 알림 채널 설정
+      operationId: updateNotificationChannel
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 성공
+  /notifications/templates:
+    get:
+      tags: [notifications]
+      summary: 알림 템플릿 목록
+      operationId: listNotificationTemplates
+      responses:
+        '200':
+          description: 성공
+    post:
+      tags: [notifications]
+      summary: 알림 템플릿 생성
+      operationId: createNotificationTemplate
+      responses:
+        '201':
+          description: 생성됨
+  /notifications/templates/{id}:
+    get:
+      tags: [notifications]
+      summary: 알림 템플릿 상세
+      operationId: getNotificationTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 성공
+    delete:
+      tags: [notifications]
+      summary: 알림 템플릿 삭제
+      operationId: deleteNotificationTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 삭제됨

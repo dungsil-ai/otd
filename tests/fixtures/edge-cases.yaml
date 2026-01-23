@@ -1,0 +1,505 @@
+openapi: 3.0.3
+info:
+  title: Edge Cases API
+  version: 1.0.0
+  description: |
+    엣지 케이스 테스트용 OpenAPI 문서입니다.
+    빈 경로, 특수문자, 복잡한 스키마 등을 포함합니다.
+
+servers:
+  - url: https://api.example.com/v1
+  - url: https://staging-api.example.com/v1
+    description: Staging Server
+
+tags:
+  - name: special-chars
+    description: 특수문자 테스트
+  - name: unicode
+    description: 유니코드 테스트
+  - name: complex-schema
+    description: 복잡한 스키마 테스트
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API 키 인증
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.com/oauth/authorize
+          tokenUrl: https://auth.example.com/oauth/token
+          scopes:
+            read: 읽기 권한
+            write: 쓰기 권한
+  schemas:
+    DeepNested:
+      type: object
+      required:
+        - level1
+      properties:
+        level1:
+          type: object
+          properties:
+            level2:
+              type: object
+              properties:
+                level3:
+                  type: object
+                  properties:
+                    level4:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                          description: 깊게 중첩된 값
+    ArrayOfArrays:
+      type: array
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: integer
+            data:
+              type: array
+              items:
+                type: string
+    SpecialFields:
+      type: object
+      properties:
+        "with-hyphen":
+          type: string
+        "with_underscore":
+          type: string
+        "with spaces":
+          type: string
+        "한글필드":
+          type: string
+        "日本語フィールド":
+          type: string
+        "emoji🎉":
+          type: string
+        "123numeric":
+          type: integer
+        "$dollarSign":
+          type: string
+        "@atSign":
+          type: string
+    EnumAllTypes:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+            - pending
+            - "with-special"
+            - "with spaces"
+            - ""
+        priority:
+          type: integer
+          enum: [1, 2, 3, 10, 100]
+    AllOfExample:
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: integer
+        - type: object
+          properties:
+            name:
+              type: string
+        - $ref: '#/components/schemas/SpecialFields'
+    OneOfExample:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [cat]
+            meow:
+              type: boolean
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [dog]
+            bark:
+              type: boolean
+    NullableFields:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        age:
+          type: integer
+          nullable: true
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+
+paths:
+  # 빈 경로 관련
+  /:
+    get:
+      tags: [special-chars]
+      summary: 루트 경로 테스트
+      operationId: getRoot
+      responses:
+        '200':
+          description: 성공
+
+  # 특수문자 경로
+  /special-chars/with-hyphen:
+    get:
+      tags: [special-chars]
+      summary: 하이픈 경로 테스트
+      operationId: getWithHyphen
+      responses:
+        '200':
+          description: 성공
+
+  /special-chars/with_underscore:
+    get:
+      tags: [special-chars]
+      summary: 언더스코어 경로 테스트
+      operationId: getWithUnderscore
+      responses:
+        '200':
+          description: 성공
+
+  /special-chars/{id}/sub-{name}:
+    get:
+      tags: [special-chars]
+      summary: 복합 경로 파라미터 테스트
+      operationId: getComplexPath
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 성공
+
+  # 유니코드 경로
+  /unicode/한글-경로:
+    get:
+      tags: [unicode]
+      summary: 한글 경로 테스트
+      description: |
+        이 엔드포인트는 한글 경로를 테스트합니다.
+        URL 인코딩이 필요할 수 있습니다.
+      operationId: getKoreanPath
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  메시지:
+                    type: string
+                    description: 한글 필드명
+
+  /unicode/日本語:
+    get:
+      tags: [unicode]
+      summary: 日本語パステスト
+      operationId: getJapanesePath
+      responses:
+        '200':
+          description: 成功
+
+  /unicode/emoji-🚀-path:
+    get:
+      tags: [unicode]
+      summary: 이모지 경로 테스트 🎉
+      operationId: getEmojiPath
+      responses:
+        '200':
+          description: 성공
+
+  # 복잡한 스키마
+  /complex/deep-nested:
+    post:
+      tags: [complex-schema]
+      summary: 깊게 중첩된 객체 테스트
+      operationId: postDeepNested
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeepNested'
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepNested'
+
+  /complex/array-of-arrays:
+    post:
+      tags: [complex-schema]
+      summary: 배열의 배열 테스트
+      operationId: postArrayOfArrays
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArrayOfArrays'
+      responses:
+        '200':
+          description: 성공
+
+  /complex/special-fields:
+    get:
+      tags: [complex-schema]
+      summary: 특수 필드명 테스트
+      operationId: getSpecialFields
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecialFields'
+
+  /complex/all-of:
+    post:
+      tags: [complex-schema]
+      summary: allOf 스키마 테스트
+      operationId: postAllOf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllOfExample'
+      responses:
+        '200':
+          description: 성공
+
+  /complex/one-of:
+    post:
+      tags: [complex-schema]
+      summary: oneOf 스키마 테스트
+      operationId: postOneOf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OneOfExample'
+      responses:
+        '200':
+          description: 성공
+
+  /complex/nullable:
+    get:
+      tags: [complex-schema]
+      summary: nullable 필드 테스트
+      operationId: getNullable
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NullableFields'
+
+  # 다양한 파라미터 타입
+  /params/all-types:
+    get:
+      tags: [complex-schema]
+      summary: 모든 파라미터 타입 테스트
+      operationId: getAllParamTypes
+      parameters:
+        - name: pathParam
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: queryString
+          in: query
+          schema:
+            type: string
+          description: 쿼리 문자열 파라미터
+        - name: queryArray
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: 쿼리 배열 파라미터
+        - name: queryInt
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+          description: 정수 파라미터 (0-100)
+        - name: X-Custom-Header
+          in: header
+          schema:
+            type: string
+          description: 커스텀 헤더
+        - name: session
+          in: cookie
+          schema:
+            type: string
+          description: 세션 쿠키
+      responses:
+        '200':
+          description: 성공
+
+  # 다양한 응답 코드
+  /responses/all-codes:
+    get:
+      tags: [complex-schema]
+      summary: 다양한 응답 코드 테스트
+      operationId: getAllResponseCodes
+      responses:
+        '200':
+          description: 성공
+        '201':
+          description: 생성됨
+        '204':
+          description: 내용 없음
+        '301':
+          description: 영구 이동
+        '400':
+          description: 잘못된 요청
+        '401':
+          description: 인증 필요
+        '403':
+          description: 접근 금지
+        '404':
+          description: 찾을 수 없음
+        '500':
+          description: 서버 오류
+        default:
+          description: 예상치 못한 오류
+
+  # 빈 내용
+  /empty/no-parameters:
+    get:
+      tags: [complex-schema]
+      summary: 파라미터 없는 엔드포인트
+      operationId: getNoParams
+      responses:
+        '200':
+          description: 성공
+
+  /empty/no-responses:
+    options:
+      tags: [complex-schema]
+      summary: OPTIONS 요청 테스트
+      operationId: optionsTest
+      responses:
+        '200':
+          description: 성공
+
+  /empty/no-summary:
+    get:
+      tags: [complex-schema]
+      operationId: getNoSummary
+      responses:
+        '200':
+          description: 성공
+
+  # 매우 긴 설명
+  /long/description:
+    get:
+      tags: [complex-schema]
+      summary: 매우 긴 설명 테스트
+      description: |
+        이 엔드포인트는 매우 긴 설명을 테스트합니다.
+        
+        ## 개요
+        
+        이 API는 다양한 목적으로 사용될 수 있습니다.
+        예를 들어:
+        - 첫 번째 용도
+        - 두 번째 용도
+        - 세 번째 용도
+        
+        ## 사용 예시
+        
+        ```json
+        {
+          "key": "value",
+          "nested": {
+            "field": "data"
+          }
+        }
+        ```
+        
+        ## 주의사항
+        
+        1. 이 API는 인증이 필요합니다.
+        2. 요청 제한이 적용됩니다.
+        3. 응답은 캐시될 수 있습니다.
+        
+        자세한 내용은 [문서](https://docs.example.com)를 참조하세요.
+      operationId: getLongDescription
+      responses:
+        '200':
+          description: 성공
+
+  # 다양한 Content-Type
+  /content-types/multiple:
+    post:
+      tags: [complex-schema]
+      summary: 다양한 Content-Type 테스트
+      operationId: postMultipleContentTypes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+          application/xml:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                type: object
+            text/plain:
+              schema:
+                type: string
