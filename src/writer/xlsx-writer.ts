@@ -48,9 +48,15 @@ const SECTION_HEADER_STYLE: Partial<ExcelJS.Style> = {
   },
 };
 
+const SUBTITLE_STYLE: Partial<ExcelJS.Style> = {
+  ...SECTION_HEADER_STYLE,
+  alignment: { vertical: "middle", horizontal: "center" },
+};
+
 /** 라벨 스타일 */
 const LABEL_STYLE: Partial<ExcelJS.Style> = {
-  font: { bold: true },
+  font: { bold: true, color: { argb: "FF1F1F1F" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFF2F5FB" } },
   alignment: { vertical: "top" },
   border: {
     top: { style: "thin" },
@@ -82,6 +88,11 @@ const PRIMARY_LABEL_STYLE: Partial<ExcelJS.Style> = {
     bottom: { style: "thin" },
     right: { style: "thin" },
   },
+};
+
+const PRIMARY_LABEL_CENTER_STYLE: Partial<ExcelJS.Style> = {
+  ...PRIMARY_LABEL_STYLE,
+  alignment: { vertical: "middle", horizontal: "center" },
 };
 
 /** 값 스타일 */
@@ -455,9 +466,9 @@ function writeEndpointDetail(
   sheet.getCell(`C${row}`).value = endpoint.method;
   sheet.getCell(`D${row}`).value = "엔드포인트";
   sheet.getCell(`E${row}`).value = endpoint.path;
-  applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_STYLE);
+  applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_CENTER_STYLE);
   applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
-  applyStyle(sheet.getCell(`D${row}`), PRIMARY_LABEL_STYLE);
+  applyStyle(sheet.getCell(`D${row}`), PRIMARY_LABEL_CENTER_STYLE);
   applyStyle(sheet.getCell(`E${row}`), VALUE_STYLE);
   sheet.mergeCells(`E${row}:F${row}`);
   row++;
@@ -465,7 +476,7 @@ function writeEndpointDetail(
   const writeMergedRow = (label: string, value: string): void => {
     sheet.getCell(`B${row}`).value = label;
     sheet.getCell(`C${row}`).value = value;
-    applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_STYLE);
+    applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_CENTER_STYLE);
     applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
     sheet.mergeCells(`C${row}:F${row}`);
     row++;
@@ -520,7 +531,7 @@ function writeParametersSection(
 
   // 섹션 헤더
   sheet.getCell(`B${row}`).value = "파라미터";
-  applyStyle(sheet.getCell(`B${row}`), SECTION_HEADER_STYLE);
+  applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
   sheet.mergeCells(`B${row}:F${row}`);
   row++;
 
@@ -563,7 +574,7 @@ function writeRequestBodySection(
 
   // 섹션 헤더
   sheet.getCell(`B${row}`).value = `요청 바디 (${requestBody.contentType})`;
-  applyStyle(sheet.getCell(`B${row}`), SECTION_HEADER_STYLE);
+  applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
   sheet.mergeCells(`B${row}:F${row}`);
   row++;
 
@@ -610,19 +621,13 @@ function writeResponseSection(
   let row = startRow;
 
   // 섹션 헤더
-  sheet.getCell(`B${row}`).value = `응답 ${response.statusCode}`;
-  applyStyle(sheet.getCell(`B${row}`), SECTION_HEADER_STYLE);
+  const responseTitle = response.description
+    ? `응답 ${response.statusCode} (${response.description})`
+    : `응답 ${response.statusCode}`;
+  sheet.getCell(`B${row}`).value = responseTitle;
+  applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
   sheet.mergeCells(`B${row}:F${row}`);
   row++;
-
-  // 설명
-  if (response.description) {
-    sheet.getCell(`B${row}`).value = "설명";
-    sheet.getCell(`C${row}`).value = response.description;
-    applyStyle(sheet.getCell(`B${row}`), LABEL_STYLE);
-    sheet.mergeCells(`C${row}:F${row}`);
-    row++;
-  }
 
   if (response.properties.length === 0) {
     return row;
