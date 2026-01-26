@@ -55,6 +55,8 @@ export interface ParameterInfo {
   format?: string;
   /** 설명 (선택) */
   description?: string;
+  /** 예시 값 (선택) */
+  example?: string;
 }
 
 /**
@@ -69,8 +71,20 @@ export interface RequestBodyInfo {
   schema: string;
   /** 스키마 속성 목록 */
   properties: SchemaPropertyInfo[];
-  /** 샘플 데이터 (JSON 문자열) */
-  sample?: string;
+  /** 샘플 데이터 목록 */
+  samples: SampleInfo[];
+}
+
+/**
+ * 샘플 데이터 정보
+ */
+export interface SampleInfo {
+  /** 샘플 이름 (선택, named example의 경우) */
+  name?: string;
+  /** 샘플 요약 (선택) */
+  summary?: string;
+  /** 샘플 JSON 문자열 */
+  value: string;
 }
 
 /**
@@ -103,8 +117,8 @@ export interface ResponseInfo {
   schema?: string;
   /** 스키마 속성 목록 */
   properties: SchemaPropertyInfo[];
-  /** 샘플 데이터 (JSON 문자열) */
-  sample?: string;
+  /** 샘플 데이터 목록 */
+  samples: SampleInfo[];
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   type ParameterInfo,
   type RequestBodyInfo,
   type ResponseInfo,
+  type SampleInfo,
   type SecuritySchemeInfo,
   type XlsxData,
 } from "../models/types";
@@ -463,7 +464,8 @@ function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
       { width: 20 }, // C: 값/타입
       { width: 12 }, // D: 형식
       { width: 8 }, // E: 필수
-      { width: 50 }, // F: 설명
+      { width: 40 }, // F: 설명
+      { width: 25 }, // G: 예시
     ];
 
     let currentRow = 2;
@@ -495,7 +497,7 @@ function writeEndpointDetail(
   applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
   applyStyle(sheet.getCell(`D${row}`), PRIMARY_LABEL_CENTER_STYLE);
   applyStyle(sheet.getCell(`E${row}`), VALUE_STYLE);
-  sheet.mergeCells(`E${row}:F${row}`);
+  sheet.mergeCells(`E${row}:G${row}`);
   row++;
 
   const writeMergedRow = (label: string, value: string): void => {
@@ -503,7 +505,7 @@ function writeEndpointDetail(
     sheet.getCell(`C${row}`).value = value;
     applyStyle(sheet.getCell(`B${row}`), PRIMARY_LABEL_CENTER_STYLE);
     applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
-    sheet.mergeCells(`C${row}:F${row}`);
+    sheet.mergeCells(`C${row}:G${row}`);
     row++;
   };
 
@@ -520,9 +522,10 @@ function writeEndpointDetail(
     writeMergedRow(serverRow.label, serverRow.value);
   }
 
-  // 파라미터 섹션 (기본 정보 바로 다음에 시작)
+  // 파라미터 섹션 (기본 정보 바로 다음에 시작, 타입별로 분리)
   if (endpoint.parameters.length > 0) {
-    row = writeParametersSection(sheet, endpoint.parameters, row);
+    const [paramRow, _sectionCount] = writeParametersSections(sheet, endpoint.parameters, row);
+    row = paramRow;
     row += 3; // 마진 3행
   }
 
@@ -534,8 +537,11 @@ function writeEndpointDetail(
     if (requestBody.properties.length > 0) {
       row += 3; // 마진 3행
     }
-    if (requestBody.sample) {
-      row = writeSampleSection(sheet, "요청 예시", requestBody.sample, row);
+    if (requestBody.samples.length > 0) {
+      for (const sample of requestBody.samples) {
+        const title = formatSampleTitle("요청 예시", sample);
+        row = writeSampleSection(sheet, title, sample.value, row);
+      }
       // 예시 후에는 마진 없음
     } else if (i < endpoint.requestBodies.length - 1) {
       // 예시가 없고 다음 섹션이 있으면 마진
@@ -545,7 +551,7 @@ function writeEndpointDetail(
 
   // 요청과 응답 사이 마진 (마지막 요청에 예시가 없을 때만)
   const lastRequestBody = endpoint.requestBodies[endpoint.requestBodies.length - 1];
-  if (endpoint.requestBodies.length > 0 && endpoint.responses.length > 0 && !lastRequestBody?.sample) {
+  if (endpoint.requestBodies.length > 0 && endpoint.responses.length > 0 && lastRequestBody?.samples.length === 0) {
     row += 3;
   }
 
@@ -557,8 +563,12 @@ function writeEndpointDetail(
     if (response.properties.length > 0) {
       row += 3; // 마진 3행
     }
-    if (response.sample) {
-      row = writeSampleSection(sheet, `응답 ${response.statusCode} 예시`, response.sample, row);
+    if (response.samples.length > 0) {
+      for (const sample of response.samples) {
+        const baseTitle = `응답 ${response.statusCode} 예시`;
+        const title = formatSampleTitle(baseTitle, sample);
+        row = writeSampleSection(sheet, title, sample.value, row);
+      }
       // 예시 후에는 마진 없음
     } else if (i < endpoint.responses.length - 1) {
       // 예시가 없고 다음 섹션이 있으면 마진
@@ -567,30 +577,97 @@ function writeEndpointDetail(
   }
 
   // 엔드포인트 블록 전체에 굵은 외곽선 적용
-  applyBlockOutline(sheet, startRow, row - 1, "B", "F");
+  applyBlockOutline(sheet, startRow, row - 1, "B", "G");
 
   return row;
 }
 
 /**
- * 파라미터 섹션을 작성합니다.
+ * 파라미터 타입(in)에 대한 한글 라벨 매핑
  */
-function writeParametersSection(
+const PARAMETER_TYPE_LABELS: Record<string, string> = {
+  path: "요청 경로",
+  query: "요청 쿼리",
+  header: "요청 헤더",
+  cookie: "요청 쿠키",
+};
+
+/**
+ * 파라미터 타입(in)의 정렬 순서
+ */
+const PARAMETER_TYPE_ORDER: string[] = ["path", "query", "header", "cookie"];
+
+/**
+ * 파라미터 섹션을 타입별로 작성합니다.
+ * 반환값: [마지막 행 번호, 작성된 섹션 수]
+ */
+function writeParametersSections(
   sheet: ExcelJS.Worksheet,
+  parameters: ParameterInfo[],
+  startRow: number
+): [number, number] {
+  // 타입별로 그룹화
+  const grouped = new Map<string, ParameterInfo[]>();
+  for (const param of parameters) {
+    const group = grouped.get(param.in) ?? [];
+    group.push(param);
+    grouped.set(param.in, group);
+  }
+
+  let row = startRow;
+  let sectionCount = 0;
+
+  // 정렬 순서에 따라 각 타입별 섹션 작성
+  for (const paramType of PARAMETER_TYPE_ORDER) {
+    const params = grouped.get(paramType);
+    if (!params || params.length === 0) continue;
+
+    // 첫 섹션이 아니면 마진 추가
+    if (sectionCount > 0) {
+      row += 3;
+    }
+
+    row = writeSingleParameterSection(sheet, paramType, params, row);
+    sectionCount++;
+  }
+
+  // 정의되지 않은 타입의 파라미터 처리 (fallback)
+  for (const [paramType, params] of grouped) {
+    if (PARAMETER_TYPE_ORDER.includes(paramType)) continue;
+    if (params.length === 0) continue;
+
+    if (sectionCount > 0) {
+      row += 3;
+    }
+
+    row = writeSingleParameterSection(sheet, paramType, params, row);
+    sectionCount++;
+  }
+
+  return [row, sectionCount];
+}
+
+/**
+ * 단일 파라미터 타입 섹션을 작성합니다.
+ */
+function writeSingleParameterSection(
+  sheet: ExcelJS.Worksheet,
+  paramType: string,
   parameters: ParameterInfo[],
   startRow: number
 ): number {
   let row = startRow;
 
   // 섹션 헤더
-  sheet.getCell(`B${row}`).value = "파라미터";
+  const sectionTitle = PARAMETER_TYPE_LABELS[paramType] ?? `${paramType} 파라미터`;
+  sheet.getCell(`B${row}`).value = sectionTitle;
   applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
-  sheet.mergeCells(`B${row}:F${row}`);
+  sheet.mergeCells(`B${row}:G${row}`);
   row++;
 
   // 테이블 헤더
-  const headers = ["이름", "위치", "타입", "필수", "설명"];
-  ["B", "C", "D", "E", "F"].forEach((col, i) => {
+  const headers = ["이름", "타입", "형식", "필수", "설명", "예시"];
+  ["B", "C", "D", "E", "F", "G"].forEach((col, i) => {
     sheet.getCell(`${col}${row}`).value = headers[i];
     applyStyle(sheet.getCell(`${col}${row}`), HEADER_STYLE);
   });
@@ -599,13 +676,14 @@ function writeParametersSection(
   // 데이터
   for (const param of parameters) {
     sheet.getCell(`B${row}`).value = param.name;
-    sheet.getCell(`C${row}`).value = param.in;
-    sheet.getCell(`D${row}`).value = param.format ? `${param.type} (${param.format})` : param.type;
+    sheet.getCell(`C${row}`).value = param.type;
+    sheet.getCell(`D${row}`).value = param.format ?? "";
     sheet.getCell(`E${row}`).value = param.required ? "O" : "";
     sheet.getCell(`F${row}`).value = param.description ?? "";
+    sheet.getCell(`G${row}`).value = param.example ?? "";
 
     // 테두리 적용
-    for (const col of ["B", "C", "D", "E", "F"]) {
+    for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
     sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
@@ -628,14 +706,14 @@ function writeRequestBodySection(
   // 섹션 헤더
   sheet.getCell(`B${row}`).value = `요청 바디 (${requestBody.contentType})`;
   applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
-  sheet.mergeCells(`B${row}:F${row}`);
+  sheet.mergeCells(`B${row}:G${row}`);
   row++;
 
   if (requestBody.properties.length === 0) {
     const isFile = isFileContentType(requestBody.contentType);
     sheet.getCell(`B${row}`).value = isFile ? "(첨부파일)" : "(스키마 없음)";
     applyStyle(sheet.getCell(`B${row}`), CELL_STYLE);
-    sheet.mergeCells(`B${row}:F${row}`);
+    sheet.mergeCells(`B${row}:G${row}`);
     return row + 1;
   }
 
@@ -645,6 +723,8 @@ function writeRequestBodySection(
     sheet.getCell(`${col}${row}`).value = headers[i];
     applyStyle(sheet.getCell(`${col}${row}`), HEADER_STYLE);
   });
+  // G열에 빈 헤더 추가 (일관성)
+  applyStyle(sheet.getCell(`G${row}`), HEADER_STYLE);
   row++;
 
   // 데이터
@@ -656,7 +736,7 @@ function writeRequestBodySection(
     sheet.getCell(`F${row}`).value = prop.description ?? "";
 
     // 테두리 적용
-    for (const col of ["B", "C", "D", "E", "F"]) {
+    for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
     sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
@@ -679,7 +759,7 @@ function writeResponseSection(
   // 섹션 헤더
   sheet.getCell(`B${row}`).value = `응답 ${response.statusCode}`;
   applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
-  sheet.mergeCells(`B${row}:F${row}`);
+  sheet.mergeCells(`B${row}:G${row}`);
   row++;
 
   const writeMetaRow = (label: string, value?: string): void => {
@@ -688,7 +768,7 @@ function writeResponseSection(
     sheet.getCell(`C${row}`).value = value;
     applyStyle(sheet.getCell(`B${row}`), SECONDARY_LABEL_STYLE);
     applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
-    sheet.mergeCells(`C${row}:F${row}`);
+    sheet.mergeCells(`C${row}:G${row}`);
     row++;
   };
 
@@ -705,6 +785,8 @@ function writeResponseSection(
     sheet.getCell(`${col}${row}`).value = headers[i];
     applyStyle(sheet.getCell(`${col}${row}`), HEADER_STYLE);
   });
+  // G열에 빈 헤더 추가 (일관성)
+  applyStyle(sheet.getCell(`G${row}`), HEADER_STYLE);
   row++;
 
   // 데이터
@@ -716,7 +798,7 @@ function writeResponseSection(
     sheet.getCell(`F${row}`).value = prop.description ?? "";
 
     // 테두리 적용
-    for (const col of ["B", "C", "D", "E", "F"]) {
+    for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
     sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
@@ -740,7 +822,7 @@ function writeSampleSection(
   // 예시 제목 (depth 2 스타일)
   sheet.getCell(`B${row}`).value = title;
   applyStyle(sheet.getCell(`B${row}`), HEADER_STYLE);
-  sheet.mergeCells(`B${row}:F${row}`);
+  sheet.mergeCells(`B${row}:G${row}`);
   row++;
 
   // 샘플 데이터 (전체 행, wrapText)
@@ -748,7 +830,7 @@ function writeSampleSection(
   sampleCell.value = sample;
   applyStyle(sampleCell, CELL_STYLE);
   sampleCell.alignment = { vertical: "top", wrapText: true };
-  sheet.mergeCells(`B${row}:F${row}`);
+  sheet.mergeCells(`B${row}:G${row}`);
 
   // 행 높이를 줄 수에 맞게 조정 (줄당 18pt + 여유분)
   const lineCount = sample.split("\n").length;
@@ -761,6 +843,20 @@ function writeSampleSection(
 // ============================================================================
 // 유틸리티
 // ============================================================================
+
+/**
+ * 샘플 제목을 포맷합니다.
+ * 샘플에 이름이나 요약이 있으면 제목에 포함합니다.
+ */
+function formatSampleTitle(baseTitle: string, sample: SampleInfo): string {
+  if (sample.summary) {
+    return `${baseTitle}: ${sample.summary}`;
+  }
+  if (sample.name && sample.name !== "default") {
+    return `${baseTitle}: ${sample.name}`;
+  }
+  return baseTitle;
+}
 
 /**
  * 셀에 스타일을 적용합니다.
@@ -804,8 +900,9 @@ function resolveServerRows(
   const rows: { label: string; value: string }[] = [];
 
   const resolvedDevIndex = devIndex >= 0 ? devIndex : 0;
-  if (resolvedDevIndex >= 0) {
-    rows.push({ label: "개발 서버", value: normalized[resolvedDevIndex].endpointUrl });
+  const devServer = normalized[resolvedDevIndex];
+  if (resolvedDevIndex >= 0 && devServer) {
+    rows.push({ label: "개발 서버", value: devServer.endpointUrl });
     used.add(resolvedDevIndex);
   }
 
@@ -814,8 +911,9 @@ function resolveServerRows(
     resolvedProdIndex = normalized.findIndex((_, index) => !used.has(index));
   }
 
-  if (resolvedProdIndex >= 0) {
-    rows.push({ label: "운영 서버", value: normalized[resolvedProdIndex].endpointUrl });
+  const prodServer = normalized[resolvedProdIndex];
+  if (resolvedProdIndex >= 0 && prodServer) {
+    rows.push({ label: "운영 서버", value: prodServer.endpointUrl });
     used.add(resolvedProdIndex);
   }
 

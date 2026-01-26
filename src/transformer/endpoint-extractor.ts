@@ -12,6 +12,7 @@ import type {
   ParameterInfo,
   RequestBodyInfo,
   ResponseInfo,
+  SampleInfo,
   SchemaPropertyInfo,
   SecuritySchemeInfo,
   ServerInfo,
@@ -154,14 +155,66 @@ function extractEndpointInfo(
 function extractParameterInfo(param: OpenAPIV3.ParameterObject): ParameterInfo {
   const schema = param.schema as OpenAPIV3.SchemaObject | undefined;
 
+  // example 값 추출 (param.example 우선, 그 다음 schema.example)
+  let example: string | undefined;
+  const rawExample = param.example ?? schema?.example;
+  if (rawExample !== undefined) {
+    example = formatParameterExample(param, rawExample);
+  }
+
+  // 배열인 경우 타입을 array<itemType> 형태로 표시
+  let type: string = schema?.type ?? "string";
+  if (schema?.type === "array" && schema.items) {
+    const itemSchema = schema.items as OpenAPIV3.SchemaObject;
+    const itemType = itemSchema.type ?? "string";
+    type = `array<${itemType}>`;
+  }
+
   return {
     name: param.name,
     in: param.in as ParameterInfo["in"],
     required: param.required ?? false,
-    type: schema?.type ?? "string",
+    type,
     format: schema?.format,
     description: param.description,
+    example,
   };
+}
+
+/**
+ * 파라미터 예시를 적절한 형식으로 포맷합니다.
+ * 쿼리스트링 파라미터는 실제 URL 형식(key=value)으로 변환합니다.
+ */
+function formatParameterExample(
+  param: OpenAPIV3.ParameterObject,
+  rawExample: unknown
+): string {
+  // query 파라미터인 경우 key=value 형식으로 변환
+  if (param.in === "query") {
+    // 배열인 경우
+    if (Array.isArray(rawExample)) {
+      const style = param.style ?? "form";
+      const explode = param.explode ?? (style === "form");
+
+      if (explode) {
+        // explode=true: name=value1&name=value2
+        return rawExample.map((v) => `${param.name}=${encodeURIComponent(String(v))}`).join("&");
+      } else {
+        // explode=false: name=value1,value2
+        return `${param.name}=${rawExample.map((v) => encodeURIComponent(String(v))).join(",")}`;
+      }
+    }
+    // 단일 값인 경우: name=value
+    return `${param.name}=${encodeURIComponent(String(rawExample))}`;
+  }
+
+  // query가 아닌 경우 (path, header, cookie)
+  if (typeof rawExample === "string") {
+    return rawExample;
+  }
+
+  // 그 외의 경우 JSON 문자열로 변환
+  return JSON.stringify(rawExample);
 }
 
 /**
@@ -182,6 +235,7 @@ function extractAllRequestBodies(
       schema: string;
       properties: SchemaPropertyInfo[];
       schemaObject?: OpenAPIV3.SchemaObject;
+      examples: Map<string, SampleInfo>; // name -> sample
     }
   >();
 
@@ -198,15 +252,24 @@ function extractAllRequestBodies(
         contentType,
         schema: schemaText || "(파일)",
         properties,
-        sample: undefined, // 파일은 샘플 생성 불가
+        samples: [], // 파일은 샘플 생성 불가
       });
       continue;
     }
+
+    // 해당 mediaType의 examples 추출
+    const contentExamples = extractMediaTypeExamples(mediaType);
 
     const signature = buildSchemaSignature(schemaText, properties);
     const entry = grouped.get(signature);
     if (entry) {
       entry.contentTypes.push(contentType);
+      // examples 병합 (중복 이름은 덮어쓰지 않음)
+      for (const [name, sample] of contentExamples) {
+        if (!entry.examples.has(name)) {
+          entry.examples.set(name, sample);
+        }
+      }
       continue;
     }
     grouped.set(signature, {
@@ -214,17 +277,63 @@ function extractAllRequestBodies(
       schema: schemaText,
       properties,
       schemaObject: schema,
+      examples: contentExamples,
     });
   }
 
   // 그룹화된 항목 추가
   for (const entry of grouped.values()) {
+    // examples가 있으면 사용, 없으면 스키마에서 자동 생성
+    let samples: SampleInfo[] = Array.from(entry.examples.values());
+    if (samples.length === 0) {
+      const generated = generateSampleJson(entry.schemaObject);
+      if (generated) {
+        samples = [{ value: generated }];
+      }
+    }
+
     result.push({
       required,
       contentType: entry.contentTypes.join(", "),
       schema: entry.schema,
       properties: entry.properties,
-      sample: generateSampleJson(entry.schemaObject),
+      samples,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * MediaType에서 examples를 추출합니다.
+ */
+function extractMediaTypeExamples(
+  mediaType: OpenAPIV3.MediaTypeObject
+): Map<string, SampleInfo> {
+  const result = new Map<string, SampleInfo>();
+
+  // 1. examples (named examples) 처리 - 우선순위 높음
+  if (mediaType.examples) {
+    for (const [name, exampleOrRef] of Object.entries(mediaType.examples)) {
+      const example = exampleOrRef as OpenAPIV3.ExampleObject;
+      if (example.value !== undefined) {
+        result.set(name, {
+          name,
+          summary: example.summary,
+          value: typeof example.value === "string" 
+            ? example.value 
+            : JSON.stringify(example.value, null, 2),
+        });
+      }
+    }
+  }
+
+  // 2. example (단일 예시) 처리 - examples가 없을 때만
+  if (result.size === 0 && mediaType.example !== undefined) {
+    result.set("default", {
+      value: typeof mediaType.example === "string"
+        ? mediaType.example
+        : JSON.stringify(mediaType.example, null, 2),
     });
   }
 
@@ -251,6 +360,7 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
         statusCode,
         description,
         properties: [],
+        samples: [],
       });
       continue;
     }
@@ -263,6 +373,7 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
         schema: string;
         properties: SchemaPropertyInfo[];
         schemaObject?: OpenAPIV3.SchemaObject;
+        examples: Map<string, SampleInfo>;
       }
     >();
 
@@ -279,16 +390,25 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
           contentType,
           schema: schemaText || "(파일)",
           properties,
-          sample: undefined, // 파일은 샘플 생성 불가
+          samples: [], // 파일은 샘플 생성 불가
         });
         continue;
       }
+
+      // 해당 mediaType의 examples 추출
+      const contentExamples = extractMediaTypeExamples(mediaType);
 
       const signature = buildSchemaSignature(schemaText, properties);
 
       const entry = grouped.get(signature);
       if (entry) {
         entry.contentTypes.push(contentType);
+        // examples 병합 (중복 이름은 덮어쓰지 않음)
+        for (const [name, sample] of contentExamples) {
+          if (!entry.examples.has(name)) {
+            entry.examples.set(name, sample);
+          }
+        }
         continue;
       }
       grouped.set(signature, {
@@ -296,18 +416,28 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
         schema: schemaText,
         properties,
         schemaObject: schema,
+        examples: contentExamples,
       });
     }
 
     // 그룹별로 ResponseInfo 생성
     for (const entry of grouped.values()) {
+      // examples가 있으면 사용, 없으면 스키마에서 자동 생성
+      let samples: SampleInfo[] = Array.from(entry.examples.values());
+      if (samples.length === 0) {
+        const generated = generateSampleJson(entry.schemaObject);
+        if (generated) {
+          samples = [{ value: generated }];
+        }
+      }
+
       result.push({
         statusCode,
         description,
         contentType: entry.contentTypes.join(", "),
         schema: entry.schema,
         properties: entry.properties,
-        sample: generateSampleJson(entry.schemaObject),
+        samples,
       });
     }
   }
@@ -342,25 +472,22 @@ function extractSchemaProperties(schema: OpenAPIV3.SchemaObject | undefined): Sc
   if (schema.properties) {
     for (const [name, propSchemaOrRef] of Object.entries(schema.properties)) {
       const propSchema = propSchemaOrRef as OpenAPIV3.SchemaObject;
+      
+      // 배열인 경우 타입을 array<itemType> 형태로 표시
+      let type: string = propSchema.type ?? "object";
+      if (propSchema.type === "array" && propSchema.items) {
+        const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
+        const itemType = itemSchema.type ?? "object";
+        type = `array<${itemType}>`;
+      }
+
       properties.push({
         name,
-        type: propSchema.type ?? "object",
+        type,
         format: propSchema.format,
         required: requiredFields.has(name),
         description: propSchema.description,
       });
-
-      // 배열인 경우 items 정보 추가
-      if (propSchema.type === "array" && propSchema.items) {
-        const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
-        properties.push({
-          name: `${name}[]`,
-          type: itemSchema.type ?? "object",
-          format: itemSchema.format,
-          required: false,
-          description: itemSchema.description,
-        });
-      }
     }
   }
 
