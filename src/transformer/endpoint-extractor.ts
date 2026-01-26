@@ -3,6 +3,7 @@
  * @module transformer/endpoint-extractor
  */
 
+import { sample as generateSample } from "openapi-sampler";
 import type { OpenAPIV3 } from "openapi-types";
 import type {
   ApiMetaInfo,
@@ -165,6 +166,7 @@ function extractParameterInfo(param: OpenAPIV3.ParameterObject): ParameterInfo {
 
 /**
  * 모든 요청 본문 정보를 추출합니다 (여러 Content-Type 지원).
+ * application/octet-stream, multipart/* 는 파일 첨부로 별도 분리합니다.
  */
 function extractAllRequestBodies(
   requestBody: OpenAPIV3.RequestBodyObject | undefined
@@ -172,9 +174,15 @@ function extractAllRequestBodies(
   if (!requestBody?.content) return [];
 
   const required = requestBody.required ?? false;
+  const result: RequestBodyInfo[] = [];
   const grouped = new Map<
     string,
-    { contentTypes: string[]; schema: string; properties: SchemaPropertyInfo[] }
+    {
+      contentTypes: string[];
+      schema: string;
+      properties: SchemaPropertyInfo[];
+      schemaObject?: OpenAPIV3.SchemaObject;
+    }
   >();
 
   // 모든 content type 추출
@@ -182,22 +190,41 @@ function extractAllRequestBodies(
     const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
     const schemaText = schemaToString(schema);
     const properties = extractSchemaProperties(schema);
+
+    // 파일 관련 content-type은 별도 항목으로 분리
+    if (isFileContentType(contentType)) {
+      result.push({
+        required,
+        contentType,
+        schema: schemaText || "(파일)",
+        properties,
+        sample: undefined, // 파일은 샘플 생성 불가
+      });
+      continue;
+    }
+
     const signature = buildSchemaSignature(schemaText, properties);
     const entry = grouped.get(signature);
     if (entry) {
       entry.contentTypes.push(contentType);
       continue;
     }
-    grouped.set(signature, { contentTypes: [contentType], schema: schemaText, properties });
+    grouped.set(signature, {
+      contentTypes: [contentType],
+      schema: schemaText,
+      properties,
+      schemaObject: schema,
+    });
   }
 
-  const result: RequestBodyInfo[] = [];
+  // 그룹화된 항목 추가
   for (const entry of grouped.values()) {
     result.push({
       required,
       contentType: entry.contentTypes.join(", "),
       schema: entry.schema,
       properties: entry.properties,
+      sample: generateSampleJson(entry.schemaObject),
     });
   }
 
@@ -207,6 +234,7 @@ function extractAllRequestBodies(
 /**
  * 응답 정보 목록을 추출합니다.
  * 같은 status code 내에서 스키마가 다른 content-type은 별도 항목으로 분리합니다.
+ * application/octet-stream, multipart/* 는 파일로 별도 분리합니다.
  */
 function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInfo[] {
   const result: ResponseInfo[] = [];
@@ -230,13 +258,32 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
     // 스키마 시그니처 기준으로 그룹화
     const grouped = new Map<
       string,
-      { contentTypes: string[]; schema: string; properties: SchemaPropertyInfo[] }
+      {
+        contentTypes: string[];
+        schema: string;
+        properties: SchemaPropertyInfo[];
+        schemaObject?: OpenAPIV3.SchemaObject;
+      }
     >();
 
     for (const [contentType, mediaType] of contentEntries) {
       const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
       const schemaText = schemaToString(schema);
       const properties = extractSchemaProperties(schema);
+
+      // 파일 관련 content-type은 별도 항목으로 분리
+      if (isFileContentType(contentType)) {
+        result.push({
+          statusCode,
+          description,
+          contentType,
+          schema: schemaText || "(파일)",
+          properties,
+          sample: undefined, // 파일은 샘플 생성 불가
+        });
+        continue;
+      }
+
       const signature = buildSchemaSignature(schemaText, properties);
 
       const entry = grouped.get(signature);
@@ -244,7 +291,12 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
         entry.contentTypes.push(contentType);
         continue;
       }
-      grouped.set(signature, { contentTypes: [contentType], schema: schemaText, properties });
+      grouped.set(signature, {
+        contentTypes: [contentType],
+        schema: schemaText,
+        properties,
+        schemaObject: schema,
+      });
     }
 
     // 그룹별로 ResponseInfo 생성
@@ -255,6 +307,7 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
         contentType: entry.contentTypes.join(", "),
         schema: entry.schema,
         properties: entry.properties,
+        sample: generateSampleJson(entry.schemaObject),
       });
     }
   }
@@ -347,4 +400,28 @@ function schemaToString(schema: OpenAPIV3.SchemaObject | undefined): string {
   }
 
   return schema.type ?? "unknown";
+}
+
+/**
+ * 스키마에서 샘플 JSON 문자열을 생성합니다.
+ */
+function generateSampleJson(schema: OpenAPIV3.SchemaObject | undefined): string | undefined {
+  if (!schema) return undefined;
+
+  try {
+    // openapi-sampler는 JSONSchema7 타입을 기대하지만, OpenAPI 스키마와 호환됨
+    const sample = generateSample(schema as Parameters<typeof generateSample>[0]);
+    return JSON.stringify(sample, null, 2);
+  } catch {
+    // 샘플 생성 실패 시 undefined 반환
+    return undefined;
+  }
+}
+
+/**
+ * 파일 전송 관련 content-type인지 확인합니다.
+ */
+function isFileContentType(contentType: string): boolean {
+  const lower = contentType.toLowerCase();
+  return lower === "application/octet-stream" || lower.startsWith("multipart/");
 }

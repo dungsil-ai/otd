@@ -12,8 +12,8 @@ import {
   type CliOptions,
   type EndpointInfo,
   type ParameterInfo,
+  type RequestBodyInfo,
   type ResponseInfo,
-  type SchemaPropertyInfo,
   type SecuritySchemeInfo,
   type XlsxData,
 } from "../models/types";
@@ -527,15 +527,43 @@ function writeEndpointDetail(
   }
 
   // 요청 본문 섹션 (여러 Content-Type 지원)
-  for (const requestBody of endpoint.requestBodies) {
+  for (let i = 0; i < endpoint.requestBodies.length; i++) {
+    const requestBody = endpoint.requestBodies[i]!;
     row = writeRequestBodySection(sheet, requestBody, row);
-    row += 3; // 마진 3행
+    // 스키마가 있으면 마진 후 예시, 없으면 바로 예시
+    if (requestBody.properties.length > 0) {
+      row += 3; // 마진 3행
+    }
+    if (requestBody.sample) {
+      row = writeSampleSection(sheet, "요청 예시", requestBody.sample, row);
+      // 예시 후에는 마진 없음
+    } else if (i < endpoint.requestBodies.length - 1) {
+      // 예시가 없고 다음 섹션이 있으면 마진
+      row += 3;
+    }
+  }
+
+  // 요청과 응답 사이 마진 (마지막 요청에 예시가 없을 때만)
+  const lastRequestBody = endpoint.requestBodies[endpoint.requestBodies.length - 1];
+  if (endpoint.requestBodies.length > 0 && endpoint.responses.length > 0 && !lastRequestBody?.sample) {
+    row += 3;
   }
 
   // 응답 섹션
-  for (const response of endpoint.responses) {
+  for (let i = 0; i < endpoint.responses.length; i++) {
+    const response = endpoint.responses[i]!;
     row = writeResponseSection(sheet, response, row);
-    row += 3; // 마진 3행
+    // 스키마가 있으면 마진 후 예시, 없으면 바로 예시
+    if (response.properties.length > 0) {
+      row += 3; // 마진 3행
+    }
+    if (response.sample) {
+      row = writeSampleSection(sheet, `응답 ${response.statusCode} 예시`, response.sample, row);
+      // 예시 후에는 마진 없음
+    } else if (i < endpoint.responses.length - 1) {
+      // 예시가 없고 다음 섹션이 있으면 마진
+      row += 3;
+    }
   }
 
   // 엔드포인트 블록 전체에 굵은 외곽선 적용
@@ -592,7 +620,7 @@ function writeParametersSection(
  */
 function writeRequestBodySection(
   sheet: ExcelJS.Worksheet,
-  requestBody: { required: boolean; contentType: string; properties: SchemaPropertyInfo[] },
+  requestBody: RequestBodyInfo,
   startRow: number
 ): number {
   let row = startRow;
@@ -604,7 +632,10 @@ function writeRequestBodySection(
   row++;
 
   if (requestBody.properties.length === 0) {
-    sheet.getCell(`B${row}`).value = "(스키마 없음)";
+    const isFile = isFileContentType(requestBody.contentType);
+    sheet.getCell(`B${row}`).value = isFile ? "(첨부파일)" : "(스키마 없음)";
+    applyStyle(sheet.getCell(`B${row}`), CELL_STYLE);
+    sheet.mergeCells(`B${row}:F${row}`);
     return row + 1;
   }
 
@@ -695,6 +726,38 @@ function writeResponseSection(
   return row;
 }
 
+/**
+ * 샘플 데이터 섹션을 작성합니다.
+ */
+function writeSampleSection(
+  sheet: ExcelJS.Worksheet,
+  title: string,
+  sample: string,
+  startRow: number
+): number {
+  let row = startRow;
+
+  // 예시 제목 (depth 2 스타일)
+  sheet.getCell(`B${row}`).value = title;
+  applyStyle(sheet.getCell(`B${row}`), HEADER_STYLE);
+  sheet.mergeCells(`B${row}:F${row}`);
+  row++;
+
+  // 샘플 데이터 (전체 행, wrapText)
+  const sampleCell = sheet.getCell(`B${row}`);
+  sampleCell.value = sample;
+  applyStyle(sampleCell, CELL_STYLE);
+  sampleCell.alignment = { vertical: "top", wrapText: true };
+  sheet.mergeCells(`B${row}:F${row}`);
+
+  // 행 높이를 줄 수에 맞게 조정 (줄당 18pt + 여유분)
+  const lineCount = sample.split("\n").length;
+  sheet.getRow(row).height = Math.max(20, lineCount * 18 + 5);
+  row++;
+
+  return row;
+}
+
 // ============================================================================
 // 유틸리티
 // ============================================================================
@@ -707,6 +770,14 @@ function applyStyle(cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>): void {
   if (style.fill) cell.fill = style.fill as ExcelJS.Fill;
   if (style.alignment) cell.alignment = style.alignment;
   if (style.border) cell.border = style.border;
+}
+
+/**
+ * 파일 전송 관련 content-type인지 확인합니다.
+ */
+function isFileContentType(contentType: string): boolean {
+  const lower = contentType.toLowerCase();
+  return lower.includes("octet-stream") || lower.includes("multipart");
 }
 
 function resolveServerRows(

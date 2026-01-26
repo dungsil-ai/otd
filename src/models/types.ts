@@ -69,6 +69,8 @@ export interface RequestBodyInfo {
   schema: string;
   /** 스키마 속성 목록 */
   properties: SchemaPropertyInfo[];
+  /** 샘플 데이터 (JSON 문자열) */
+  sample?: string;
 }
 
 /**
@@ -101,6 +103,8 @@ export interface ResponseInfo {
   schema?: string;
   /** 스키마 속성 목록 */
   properties: SchemaPropertyInfo[];
+  /** 샘플 데이터 (JSON 문자열) */
+  sample?: string;
 }
 
 /**
