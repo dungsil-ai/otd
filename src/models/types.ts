@@ -239,4 +239,17 @@ export interface XlsxData {
   securitySchemes: SecuritySchemeInfo[];
   /** 엔드포인트 목록 */
   endpoints: EndpointInfo[];
+  /** 태그 목록 (시트명에 사용) */
+  tags: TagInfo[];
 }
+
+/**
+ * 태그 정보
+ */
+export interface TagInfo {
+  /** 태그 이름 */
+  name: string;
+  /** 태그 설명 (선택) */
+  description?: string;
+}
+

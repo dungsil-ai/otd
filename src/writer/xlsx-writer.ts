@@ -53,6 +53,18 @@ const SUBTITLE_STYLE: Partial<ExcelJS.Style> = {
   alignment: { vertical: "middle", horizontal: "center" },
 };
 
+const SECONDARY_LABEL_STYLE: Partial<ExcelJS.Style> = {
+  font: { bold: true, color: { argb: "FF1F1F1F" } },
+  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } },
+  alignment: { vertical: "top" },
+  border: {
+    top: { style: "thin" },
+    left: { style: "thin" },
+    bottom: { style: "thin" },
+    right: { style: "thin" },
+  },
+};
+
 /** 라벨 스타일 */
 const LABEL_STYLE: Partial<ExcelJS.Style> = {
   font: { bold: true, color: { argb: "FF1F1F1F" } },
@@ -416,6 +428,14 @@ function applyMethodColor(cell: ExcelJS.Cell, method: string): void {
  * 태그별 API 상세 시트를 생성합니다.
  */
 function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
+  // 태그 이름 -> description 매핑 (시트명에 사용)
+  const tagDescriptions = new Map<string, string>();
+  for (const tag of data.tags) {
+    if (tag.description) {
+      tagDescriptions.set(tag.name, tag.description);
+    }
+  }
+
   // 태그별로 엔드포인트 그룹화
   const tagGroups = new Map<string, EndpointInfo[]>();
 
@@ -427,8 +447,13 @@ function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
   }
 
   // 각 태그별로 시트 생성
-  for (const [tag, endpoints] of tagGroups) {
-    const sheetName = `${tag} API`.substring(0, 31); // Excel 시트명 제한
+  for (const [tagName, endpoints] of tagGroups) {
+    // description이 있으면 사용, 없으면 tag name 사용
+    const displayName = tagDescriptions.get(tagName) ?? tagName;
+    // 이미 "API"로 끝나면 접미사 생략
+    const sheetName = displayName.toUpperCase().endsWith("API")
+      ? displayName.substring(0, 31)
+      : `${displayName} API`.substring(0, 31);
     const sheet = workbook.addWorksheet(sheetName);
 
     // 열 너비 설정
@@ -621,13 +646,23 @@ function writeResponseSection(
   let row = startRow;
 
   // 섹션 헤더
-  const responseTitle = response.description
-    ? `응답 ${response.statusCode} (${response.description})`
-    : `응답 ${response.statusCode}`;
-  sheet.getCell(`B${row}`).value = responseTitle;
+  sheet.getCell(`B${row}`).value = `응답 ${response.statusCode}`;
   applyStyle(sheet.getCell(`B${row}`), SUBTITLE_STYLE);
   sheet.mergeCells(`B${row}:F${row}`);
   row++;
+
+  const writeMetaRow = (label: string, value?: string): void => {
+    if (!value) return;
+    sheet.getCell(`B${row}`).value = label;
+    sheet.getCell(`C${row}`).value = value;
+    applyStyle(sheet.getCell(`B${row}`), SECONDARY_LABEL_STYLE);
+    applyStyle(sheet.getCell(`C${row}`), VALUE_STYLE);
+    sheet.mergeCells(`C${row}:F${row}`);
+    row++;
+  };
+
+  writeMetaRow("설명", response.description);
+  writeMetaRow("지원 형식", response.contentType);
 
   if (response.properties.length === 0) {
     return row;

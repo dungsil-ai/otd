@@ -14,6 +14,7 @@ import type {
   SchemaPropertyInfo,
   SecuritySchemeInfo,
   ServerInfo,
+  TagInfo,
   XlsxData,
 } from "../models/types";
 
@@ -31,7 +32,18 @@ export function extractEndpoints(document: OpenAPIV3.Document): XlsxData {
     meta: extractMetaInfo(document),
     securitySchemes: extractSecuritySchemes(document),
     endpoints: extractAllEndpoints(document),
+    tags: extractTags(document),
   };
+}
+
+/**
+ * 최상위 태그 정보를 추출합니다.
+ */
+function extractTags(document: OpenAPIV3.Document): TagInfo[] {
+  return (document.tags ?? []).map((tag) => ({
+    name: tag.name,
+    description: tag.description,
+  }));
 }
 
 /**
@@ -159,17 +171,33 @@ function extractAllRequestBodies(
 ): RequestBodyInfo[] {
   if (!requestBody?.content) return [];
 
-  const result: RequestBodyInfo[] = [];
   const required = requestBody.required ?? false;
+  const grouped = new Map<
+    string,
+    { contentTypes: string[]; schema: string; properties: SchemaPropertyInfo[] }
+  >();
 
   // 모든 content type 추출
   for (const [contentType, mediaType] of Object.entries(requestBody.content)) {
     const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
+    const schemaText = schemaToString(schema);
+    const properties = extractSchemaProperties(schema);
+    const signature = buildSchemaSignature(schemaText, properties);
+    const entry = grouped.get(signature);
+    if (entry) {
+      entry.contentTypes.push(contentType);
+      continue;
+    }
+    grouped.set(signature, { contentTypes: [contentType], schema: schemaText, properties });
+  }
+
+  const result: RequestBodyInfo[] = [];
+  for (const entry of grouped.values()) {
     result.push({
       required,
-      contentType,
-      schema: schemaToString(schema),
-      properties: extractSchemaProperties(schema),
+      contentType: entry.contentTypes.join(", "),
+      schema: entry.schema,
+      properties: entry.properties,
     });
   }
 
@@ -178,35 +206,74 @@ function extractAllRequestBodies(
 
 /**
  * 응답 정보 목록을 추출합니다.
+ * 같은 status code 내에서 스키마가 다른 content-type은 별도 항목으로 분리합니다.
  */
 function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInfo[] {
   const result: ResponseInfo[] = [];
 
   for (const [statusCode, responseOrRef] of Object.entries(responses)) {
     const response = responseOrRef as OpenAPIV3.ResponseObject;
+    const description = response.description ?? "";
 
-    const responseInfo: ResponseInfo = {
-      statusCode,
-      description: response.description ?? "",
-      properties: [],
-    };
+    const contentEntries = response.content ? Object.entries(response.content) : [];
 
-    // content가 있는 경우 스키마 추출
-    if (response.content) {
-      const contentTypes = Object.keys(response.content);
-      const contentType = contentTypes[0];
-      if (contentType) {
-        responseInfo.contentType = contentType;
-        const schema = response.content[contentType]?.schema as OpenAPIV3.SchemaObject | undefined;
-        responseInfo.schema = schemaToString(schema);
-        responseInfo.properties = extractSchemaProperties(schema);
-      }
+    // content가 없는 경우 (예: 204 No Content)
+    if (contentEntries.length === 0) {
+      result.push({
+        statusCode,
+        description,
+        properties: [],
+      });
+      continue;
     }
 
-    result.push(responseInfo);
+    // 스키마 시그니처 기준으로 그룹화
+    const grouped = new Map<
+      string,
+      { contentTypes: string[]; schema: string; properties: SchemaPropertyInfo[] }
+    >();
+
+    for (const [contentType, mediaType] of contentEntries) {
+      const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
+      const schemaText = schemaToString(schema);
+      const properties = extractSchemaProperties(schema);
+      const signature = buildSchemaSignature(schemaText, properties);
+
+      const entry = grouped.get(signature);
+      if (entry) {
+        entry.contentTypes.push(contentType);
+        continue;
+      }
+      grouped.set(signature, { contentTypes: [contentType], schema: schemaText, properties });
+    }
+
+    // 그룹별로 ResponseInfo 생성
+    for (const entry of grouped.values()) {
+      result.push({
+        statusCode,
+        description,
+        contentType: entry.contentTypes.join(", "),
+        schema: entry.schema,
+        properties: entry.properties,
+      });
+    }
   }
 
   return result;
+}
+
+function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]): string {
+  const normalized = [...properties].sort((a, b) => {
+    if (a.name !== b.name) return a.name.localeCompare(b.name);
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return (a.format ?? "").localeCompare(b.format ?? "");
+  });
+  const parts = normalized.map((prop) =>
+    [prop.name, prop.type, prop.format ?? "", prop.required ? "1" : "0", prop.description ?? ""].join(
+      "|"
+    )
+  );
+  return `${schema}::${parts.join("||")}`;
 }
 
 /**
