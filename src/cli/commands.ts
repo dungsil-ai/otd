@@ -98,7 +98,7 @@ function parseOptionToken(
   // --output, -o 옵션
   if (arg === "--output" || arg === "-o") {
     const outputPath = args[index + 1];
-    if (!outputPath) {
+    if (!outputPath || outputPath.startsWith("-")) {
       throw new AppError(
         "MISSING_ARGUMENT",
         "--output 옵션에 경로가 필요합니다.",
