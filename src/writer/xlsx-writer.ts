@@ -1113,7 +1113,12 @@ function buildRowBorder(
 
 function getMasterCell(sheet: ExcelJS.Worksheet, address: string): ExcelJS.Cell {
   const cell = sheet.getCell(address);
-  return cell.isMerged ? cell.master : cell;
+  // Defensive: ExcelJS types allow `cell.master` to be undefined even when `isMerged` is true.
+  // Fallback to the cell itself if master is not available.
+  if (!cell.isMerged || !cell.master) {
+    return cell;
+  }
+  return cell.master;
 }
 
 function buildColumnRange(startCol: string, endCol: string): string[] {
