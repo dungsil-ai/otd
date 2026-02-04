@@ -270,4 +270,3 @@ export interface TagInfo {
   /** 태그 설명 (선택) */
   description?: string;
 }
-

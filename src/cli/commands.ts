@@ -31,43 +31,18 @@ export function parseCliArgs(args: string[]): CliOptions {
 
   while (i < args.length) {
     const arg = args[i];
+    const result = parseOptionToken(arg, args, i, options);
 
-    // --help, -h 처리 (FR-016: 우선순위)
-    if (arg === "--help" || arg === "-h") {
-      options.help = true;
-      return options; // 즉시 반환
+    if (result.type === "return") {
+      return options;
     }
 
-    // --version, -v 처리 (FR-016: 우선순위)
-    if (arg === "--version" || arg === "-v") {
-      options.version = true;
-      return options; // 즉시 반환
-    }
-
-    // --output, -o 옵션
-    if (arg === "--output" || arg === "-o") {
-      i++;
-      if (i >= args.length) {
-        throw new AppError(
-          "MISSING_ARGUMENT",
-          "--output 옵션에 경로가 필요합니다.",
-          "사용법: otd -o <경로> <입력파일>"
-        );
-      }
-      options.outputPath = args[i];
-      i++;
+    if (result.type === "advance") {
+      i = result.nextIndex;
       continue;
     }
 
-    // --force, -f 옵션
-    if (arg === "--force" || arg === "-f") {
-      options.force = true;
-      i++;
-      continue;
-    }
-
-    // 알 수 없는 옵션 처리
-    if (arg?.startsWith("-")) {
+    if (result.type === "unknown") {
       throw new AppError(
         "UNKNOWN_OPTION",
         `알 수 없는 옵션: ${arg}`,
@@ -75,10 +50,7 @@ export function parseCliArgs(args: string[]): CliOptions {
       );
     }
 
-    // 위치 인자 (입력 파일)
-    if (arg) {
-      positionalArgs.push(arg);
-    }
+    positionalArgs.push(arg);
     i++;
   }
 
@@ -93,6 +65,57 @@ export function parseCliArgs(args: string[]): CliOptions {
   }
 
   return options;
+}
+
+type OptionParseResult =
+  | { type: "return" }
+  | { type: "advance"; nextIndex: number }
+  | { type: "unknown" }
+  | { type: "none" };
+
+function parseOptionToken(
+  arg: string,
+  args: string[],
+  index: number,
+  options: CliOptions
+): OptionParseResult {
+  // --help, -h 처리 (FR-016: 우선순위)
+  if (arg === "--help" || arg === "-h") {
+    options.help = true;
+    return { type: "return" };
+  }
+
+  // --version, -v 처리 (FR-016: 우선순위)
+  if (arg === "--version" || arg === "-v") {
+    options.version = true;
+    return { type: "return" };
+  }
+
+  // --output, -o 옵션
+  if (arg === "--output" || arg === "-o") {
+    const outputPath = args[index + 1];
+    if (!outputPath) {
+      throw new AppError(
+        "MISSING_ARGUMENT",
+        "--output 옵션에 경로가 필요합니다.",
+        "사용법: otd -o <경로> <입력파일>"
+      );
+    }
+    options.outputPath = outputPath;
+    return { type: "advance", nextIndex: index + 2 };
+  }
+
+  // --force, -f 옵션
+  if (arg === "--force" || arg === "-f") {
+    options.force = true;
+    return { type: "advance", nextIndex: index + 1 };
+  }
+
+  if (arg.startsWith("-")) {
+    return { type: "unknown" };
+  }
+
+  return { type: "none" };
 }
 
 /**
