@@ -1026,6 +1026,9 @@ function applyBlockOutline(
   }
   const leftCol = columns[0];
   const rightCol = columns[columns.length - 1];
+  if (!leftCol || !rightCol) {
+    return;
+  }
 
   // 먼저 모든 행을 순회하면서 외곽 테두리 적용
   for (let r = startRow; r <= endRow; r++) {
@@ -1097,14 +1100,14 @@ function applyMiddleCellBorders(
 function buildRowBorder(
   isTopRow: boolean,
   isBottomRow: boolean,
-  left: ExcelJS.Border,
-  right: ExcelJS.Border
+  left: Partial<ExcelJS.Border> | undefined,
+  right: Partial<ExcelJS.Border> | undefined
 ): Partial<ExcelJS.Borders> {
   return {
-    top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-    left,
-    bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-    right,
+    top: isTopRow ? (THICK_BORDER.top ?? { style: "thin" }) : { style: "thin" },
+    left: left ?? { style: "thin" },
+    bottom: isBottomRow ? (THICK_BORDER.bottom ?? { style: "thin" }) : { style: "thin" },
+    right: right ?? { style: "thin" },
   };
 }
 

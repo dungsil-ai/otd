@@ -31,6 +31,10 @@ export function parseCliArgs(args: string[]): CliOptions {
 
   while (i < args.length) {
     const arg = args[i];
+    if (!arg) {
+      i++;
+      continue;
+    }
     const result = parseOptionToken(arg, args, i, options);
 
     if (result.type === "return") {
