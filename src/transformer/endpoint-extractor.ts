@@ -185,24 +185,20 @@ function extractParameterInfo(param: OpenAPIV3.ParameterObject): ParameterInfo {
  * 파라미터 예시를 적절한 형식으로 포맷합니다.
  * 쿼리스트링 파라미터는 실제 URL 형식(key=value)으로 변환합니다.
  */
-function formatParameterExample(
-  param: OpenAPIV3.ParameterObject,
-  rawExample: unknown
-): string {
+function formatParameterExample(param: OpenAPIV3.ParameterObject, rawExample: unknown): string {
   // query 파라미터인 경우 key=value 형식으로 변환
   if (param.in === "query") {
     // 배열인 경우
     if (Array.isArray(rawExample)) {
       const style = param.style ?? "form";
-      const explode = param.explode ?? (style === "form");
+      const explode = param.explode ?? style === "form";
 
       if (explode) {
         // explode=true: name=value1&name=value2
         return rawExample.map((v) => `${param.name}=${encodeURIComponent(String(v))}`).join("&");
-      } else {
-        // explode=false: name=value1,value2
-        return `${param.name}=${rawExample.map((v) => encodeURIComponent(String(v))).join(",")}`;
       }
+      // explode=false: name=value1,value2
+      return `${param.name}=${rawExample.map((v) => encodeURIComponent(String(v))).join(",")}`;
     }
     // 단일 값인 경우: name=value
     return `${param.name}=${encodeURIComponent(String(rawExample))}`;
@@ -228,76 +224,36 @@ function extractAllRequestBodies(
 
   const required = requestBody.required ?? false;
   const result: RequestBodyInfo[] = [];
-  const grouped = new Map<
-    string,
-    {
-      contentTypes: string[];
-      schema: string;
-      properties: SchemaPropertyInfo[];
-      schemaObject?: OpenAPIV3.SchemaObject;
-      examples: Map<string, SampleInfo>; // name -> sample
-    }
-  >();
+  const grouped = new Map<string, GroupedContentEntry>();
 
   // 모든 content type 추출
   for (const [contentType, mediaType] of Object.entries(requestBody.content)) {
-    const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
-    const schemaText = schemaToString(schema);
-    const properties = extractSchemaProperties(schema);
+    const entry = buildMediaTypeEntry(mediaType);
 
     // 파일 관련 content-type은 별도 항목으로 분리
     if (isFileContentType(contentType)) {
       result.push({
         required,
         contentType,
-        schema: schemaText || "(파일)",
-        properties,
+        schema: entry.schemaText || "(파일)",
+        properties: entry.properties,
         samples: [], // 파일은 샘플 생성 불가
       });
       continue;
     }
 
-    // 해당 mediaType의 examples 추출
-    const contentExamples = extractMediaTypeExamples(mediaType);
-
-    const signature = buildSchemaSignature(schemaText, properties);
-    const entry = grouped.get(signature);
-    if (entry) {
-      entry.contentTypes.push(contentType);
-      // examples 병합 (중복 이름은 덮어쓰지 않음)
-      for (const [name, sample] of contentExamples) {
-        if (!entry.examples.has(name)) {
-          entry.examples.set(name, sample);
-        }
-      }
-      continue;
-    }
-    grouped.set(signature, {
-      contentTypes: [contentType],
-      schema: schemaText,
-      properties,
-      schemaObject: schema,
-      examples: contentExamples,
-    });
+    const signature = buildSchemaSignature(entry.schemaText, entry.properties);
+    addGroupedEntry(grouped, signature, contentType, entry);
   }
 
   // 그룹화된 항목 추가
   for (const entry of grouped.values()) {
-    // examples가 있으면 사용, 없으면 스키마에서 자동 생성
-    let samples: SampleInfo[] = Array.from(entry.examples.values());
-    if (samples.length === 0) {
-      const generated = generateSampleJson(entry.schemaObject);
-      if (generated) {
-        samples = [{ value: generated }];
-      }
-    }
-
     result.push({
       required,
       contentType: entry.contentTypes.join(", "),
       schema: entry.schema,
       properties: entry.properties,
-      samples,
+      samples: resolveSamples(entry),
     });
   }
 
@@ -307,9 +263,7 @@ function extractAllRequestBodies(
 /**
  * MediaType에서 examples를 추출합니다.
  */
-function extractMediaTypeExamples(
-  mediaType: OpenAPIV3.MediaTypeObject
-): Map<string, SampleInfo> {
+function extractMediaTypeExamples(mediaType: OpenAPIV3.MediaTypeObject): Map<string, SampleInfo> {
   const result = new Map<string, SampleInfo>();
 
   // 1. examples (named examples) 처리 - 우선순위 높음
@@ -320,9 +274,10 @@ function extractMediaTypeExamples(
         result.set(name, {
           name,
           summary: example.summary,
-          value: typeof example.value === "string" 
-            ? example.value 
-            : JSON.stringify(example.value, null, 2),
+          value:
+            typeof example.value === "string"
+              ? example.value
+              : JSON.stringify(example.value, null, 2),
         });
       }
     }
@@ -331,9 +286,10 @@ function extractMediaTypeExamples(
   // 2. example (단일 예시) 처리 - examples가 없을 때만
   if (result.size === 0 && mediaType.example !== undefined) {
     result.set("default", {
-      value: typeof mediaType.example === "string"
-        ? mediaType.example
-        : JSON.stringify(mediaType.example, null, 2),
+      value:
+        typeof mediaType.example === "string"
+          ? mediaType.example
+          : JSON.stringify(mediaType.example, null, 2),
     });
   }
 
@@ -365,84 +321,117 @@ function extractResponsesInfo(responses: OpenAPIV3.ResponsesObject): ResponseInf
       continue;
     }
 
-    // 스키마 시그니처 기준으로 그룹화
-    const grouped = new Map<
-      string,
-      {
-        contentTypes: string[];
-        schema: string;
-        properties: SchemaPropertyInfo[];
-        schemaObject?: OpenAPIV3.SchemaObject;
-        examples: Map<string, SampleInfo>;
-      }
-    >();
-
-    for (const [contentType, mediaType] of contentEntries) {
-      const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
-      const schemaText = schemaToString(schema);
-      const properties = extractSchemaProperties(schema);
-
-      // 파일 관련 content-type은 별도 항목으로 분리
-      if (isFileContentType(contentType)) {
-        result.push({
-          statusCode,
-          description,
-          contentType,
-          schema: schemaText || "(파일)",
-          properties,
-          samples: [], // 파일은 샘플 생성 불가
-        });
-        continue;
-      }
-
-      // 해당 mediaType의 examples 추출
-      const contentExamples = extractMediaTypeExamples(mediaType);
-
-      const signature = buildSchemaSignature(schemaText, properties);
-
-      const entry = grouped.get(signature);
-      if (entry) {
-        entry.contentTypes.push(contentType);
-        // examples 병합 (중복 이름은 덮어쓰지 않음)
-        for (const [name, sample] of contentExamples) {
-          if (!entry.examples.has(name)) {
-            entry.examples.set(name, sample);
-          }
-        }
-        continue;
-      }
-      grouped.set(signature, {
-        contentTypes: [contentType],
-        schema: schemaText,
-        properties,
-        schemaObject: schema,
-        examples: contentExamples,
-      });
-    }
+    const grouped = groupResponseContentEntries(contentEntries, result, statusCode, description);
 
     // 그룹별로 ResponseInfo 생성
     for (const entry of grouped.values()) {
-      // examples가 있으면 사용, 없으면 스키마에서 자동 생성
-      let samples: SampleInfo[] = Array.from(entry.examples.values());
-      if (samples.length === 0) {
-        const generated = generateSampleJson(entry.schemaObject);
-        if (generated) {
-          samples = [{ value: generated }];
-        }
-      }
-
       result.push({
         statusCode,
         description,
         contentType: entry.contentTypes.join(", "),
         schema: entry.schema,
         properties: entry.properties,
-        samples,
+        samples: resolveSamples(entry),
       });
     }
   }
 
   return result;
+}
+
+type GroupedContentEntry = {
+  contentTypes: string[];
+  schema: string;
+  properties: SchemaPropertyInfo[];
+  schemaObject?: OpenAPIV3.SchemaObject;
+  examples: Map<string, SampleInfo>;
+};
+
+type MediaTypeEntry = {
+  schemaText: string;
+  properties: SchemaPropertyInfo[];
+  schemaObject?: OpenAPIV3.SchemaObject;
+  examples: Map<string, SampleInfo>;
+};
+
+function buildMediaTypeEntry(mediaType: OpenAPIV3.MediaTypeObject): MediaTypeEntry {
+  const schema = mediaType?.schema as OpenAPIV3.SchemaObject | undefined;
+  return {
+    schemaText: schemaToString(schema),
+    properties: extractSchemaProperties(schema),
+    schemaObject: schema,
+    examples: extractMediaTypeExamples(mediaType),
+  };
+}
+
+function addGroupedEntry(
+  grouped: Map<string, GroupedContentEntry>,
+  signature: string,
+  contentType: string,
+  entry: MediaTypeEntry
+): void {
+  const existing = grouped.get(signature);
+  if (existing) {
+    existing.contentTypes.push(contentType);
+    mergeExamples(existing.examples, entry.examples);
+    return;
+  }
+
+  grouped.set(signature, {
+    contentTypes: [contentType],
+    schema: entry.schemaText,
+    properties: entry.properties,
+    schemaObject: entry.schemaObject,
+    examples: entry.examples,
+  });
+}
+
+function mergeExamples(target: Map<string, SampleInfo>, source: Map<string, SampleInfo>): void {
+  for (const [name, sample] of source) {
+    if (!target.has(name)) {
+      target.set(name, sample);
+    }
+  }
+}
+
+function resolveSamples(entry: GroupedContentEntry): SampleInfo[] {
+  const samples = Array.from(entry.examples.values());
+  if (samples.length > 0) {
+    return samples;
+  }
+
+  const generated = generateSampleJson(entry.schemaObject);
+  return generated ? [{ value: generated }] : [];
+}
+
+function groupResponseContentEntries(
+  contentEntries: [string, OpenAPIV3.MediaTypeObject][],
+  result: ResponseInfo[],
+  statusCode: string,
+  description: string
+): Map<string, GroupedContentEntry> {
+  const grouped = new Map<string, GroupedContentEntry>();
+
+  for (const [contentType, mediaType] of contentEntries) {
+    const entry = buildMediaTypeEntry(mediaType);
+
+    if (isFileContentType(contentType)) {
+      result.push({
+        statusCode,
+        description,
+        contentType,
+        schema: entry.schemaText || "(파일)",
+        properties: entry.properties,
+        samples: [],
+      });
+      continue;
+    }
+
+    const signature = buildSchemaSignature(entry.schemaText, entry.properties);
+    addGroupedEntry(grouped, signature, contentType, entry);
+  }
+
+  return grouped;
 }
 
 function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]): string {
@@ -452,9 +441,13 @@ function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]):
     return (a.format ?? "").localeCompare(b.format ?? "");
   });
   const parts = normalized.map((prop) =>
-    [prop.name, prop.type, prop.format ?? "", prop.required ? "1" : "0", prop.description ?? ""].join(
-      "|"
-    )
+    [
+      prop.name,
+      prop.type,
+      prop.format ?? "",
+      prop.required ? "1" : "0",
+      prop.description ?? "",
+    ].join("|")
   );
   return `${schema}::${parts.join("||")}`;
 }
@@ -472,7 +465,7 @@ function extractSchemaProperties(schema: OpenAPIV3.SchemaObject | undefined): Sc
   if (schema.properties) {
     for (const [name, propSchemaOrRef] of Object.entries(schema.properties)) {
       const propSchema = propSchemaOrRef as OpenAPIV3.SchemaObject;
-      
+
       // 배열인 경우 타입을 array<itemType> 형태로 표시
       let type: string = propSchema.type ?? "object";
       if (propSchema.type === "array" && propSchema.items) {

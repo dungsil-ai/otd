@@ -488,7 +488,25 @@ function writeEndpointDetail(
 ): number {
   let row = startRow;
 
-  // 기본 정보 (메서드/엔드포인트/요약/설명/서버)
+  row = writeEndpointHeader(sheet, endpoint, row);
+  row = writeEndpointMetaRows(sheet, endpoint, data, row);
+  row = writeEndpointParametersSection(sheet, endpoint.parameters, row);
+  row = writeEndpointRequestBodiesSection(sheet, endpoint.requestBodies, row);
+  row = applyRequestResponseMargin(row, endpoint.requestBodies, endpoint.responses);
+  row = writeEndpointResponsesSection(sheet, endpoint.responses, row);
+
+  // 엔드포인트 블록 전체에 굵은 외곽선 적용
+  applyBlockOutline(sheet, startRow, row - 1, "B", "G");
+
+  return row;
+}
+
+function writeEndpointHeader(
+  sheet: ExcelJS.Worksheet,
+  endpoint: EndpointInfo,
+  startRow: number
+): number {
+  const row = startRow;
   sheet.getCell(`B${row}`).value = "메서드";
   sheet.getCell(`C${row}`).value = endpoint.method;
   sheet.getCell(`D${row}`).value = "엔드포인트";
@@ -498,8 +516,16 @@ function writeEndpointDetail(
   applyStyle(sheet.getCell(`D${row}`), PRIMARY_LABEL_CENTER_STYLE);
   applyStyle(sheet.getCell(`E${row}`), VALUE_STYLE);
   sheet.mergeCells(`E${row}:G${row}`);
-  row++;
+  return row + 1;
+}
 
+function writeEndpointMetaRows(
+  sheet: ExcelJS.Worksheet,
+  endpoint: EndpointInfo,
+  data: XlsxData,
+  startRow: number
+): number {
+  let row = startRow;
   const writeMergedRow = (label: string, value: string): void => {
     sheet.getCell(`B${row}`).value = label;
     sheet.getCell(`C${row}`).value = value;
@@ -522,46 +548,75 @@ function writeEndpointDetail(
     writeMergedRow(serverRow.label, serverRow.value);
   }
 
-  // 파라미터 섹션 (기본 정보 바로 다음에 시작, 타입별로 분리)
-  if (endpoint.parameters.length > 0) {
-    const [paramRow, _sectionCount] = writeParametersSections(sheet, endpoint.parameters, row);
-    row = paramRow;
-    row += 3; // 마진 3행
+  return row;
+}
+
+function writeEndpointParametersSection(
+  sheet: ExcelJS.Worksheet,
+  parameters: ParameterInfo[],
+  startRow: number
+): number {
+  if (parameters.length === 0) {
+    return startRow;
   }
 
-  // 요청 본문 섹션 (여러 Content-Type 지원)
-  for (let i = 0; i < endpoint.requestBodies.length; i++) {
-    const requestBody = endpoint.requestBodies[i]!;
+  const [paramRow, _sectionCount] = writeParametersSections(sheet, parameters, startRow);
+  return paramRow + 3;
+}
+
+function writeEndpointRequestBodiesSection(
+  sheet: ExcelJS.Worksheet,
+  requestBodies: RequestBodyInfo[],
+  startRow: number
+): number {
+  let row = startRow;
+
+  for (const [index, requestBody] of requestBodies.entries()) {
     row = writeRequestBodySection(sheet, requestBody, row);
-    // 스키마가 있으면 마진 후 예시, 없으면 바로 예시
     if (requestBody.properties.length > 0) {
-      row += 3; // 마진 3행
+      row += 3;
     }
     if (requestBody.samples.length > 0) {
       for (const sample of requestBody.samples) {
         const title = formatSampleTitle("요청 예시", sample);
         row = writeSampleSection(sheet, title, sample.value, row);
       }
-      // 예시 후에는 마진 없음
-    } else if (i < endpoint.requestBodies.length - 1) {
-      // 예시가 없고 다음 섹션이 있으면 마진
+    } else if (index < requestBodies.length - 1) {
       row += 3;
     }
   }
 
-  // 요청과 응답 사이 마진 (마지막 요청에 예시가 없을 때만)
-  const lastRequestBody = endpoint.requestBodies[endpoint.requestBodies.length - 1];
-  if (endpoint.requestBodies.length > 0 && endpoint.responses.length > 0 && lastRequestBody?.samples.length === 0) {
-    row += 3;
+  return row;
+}
+
+function applyRequestResponseMargin(
+  row: number,
+  requestBodies: RequestBodyInfo[],
+  responses: ResponseInfo[]
+): number {
+  if (requestBodies.length === 0 || responses.length === 0) {
+    return row;
   }
 
-  // 응답 섹션
-  for (let i = 0; i < endpoint.responses.length; i++) {
-    const response = endpoint.responses[i]!;
+  const lastRequestBody = requestBodies[requestBodies.length - 1];
+  if (lastRequestBody && lastRequestBody.samples.length === 0) {
+    return row + 3;
+  }
+
+  return row;
+}
+
+function writeEndpointResponsesSection(
+  sheet: ExcelJS.Worksheet,
+  responses: ResponseInfo[],
+  startRow: number
+): number {
+  let row = startRow;
+
+  for (const [index, response] of responses.entries()) {
     row = writeResponseSection(sheet, response, row);
-    // 스키마가 있으면 마진 후 예시, 없으면 바로 예시
     if (response.properties.length > 0) {
-      row += 3; // 마진 3행
+      row += 3;
     }
     if (response.samples.length > 0) {
       for (const sample of response.samples) {
@@ -569,15 +624,10 @@ function writeEndpointDetail(
         const title = formatSampleTitle(baseTitle, sample);
         row = writeSampleSection(sheet, title, sample.value, row);
       }
-      // 예시 후에는 마진 없음
-    } else if (i < endpoint.responses.length - 1) {
-      // 예시가 없고 다음 섹션이 있으면 마진
+    } else if (index < responses.length - 1) {
       row += 3;
     }
   }
-
-  // 엔드포인트 블록 전체에 굵은 외곽선 적용
-  applyBlockOutline(sheet, startRow, row - 1, "B", "G");
 
   return row;
 }
@@ -890,7 +940,19 @@ function resolveServerRows(
     descriptor: `${server.description ?? ""} ${server.url}`.toLowerCase(),
   }));
 
-  const devKeywords = ["dev", "development", "staging", "local", "localhost", "test", "qa", "sandbox", "개발", "스테이징", "테스트"];
+  const devKeywords = [
+    "dev",
+    "development",
+    "staging",
+    "local",
+    "localhost",
+    "test",
+    "qa",
+    "sandbox",
+    "개발",
+    "스테이징",
+    "테스트",
+  ];
   const prodKeywords = ["prod", "production", "live", "운영"];
 
   const devIndex = findServerIndex(normalized, devKeywords);
@@ -919,18 +981,19 @@ function resolveServerRows(
 
   const extras = normalized.filter((_, index) => !used.has(index));
   extras.forEach((server, index) => {
-    const label = server.description ? `추가 서버 (${server.description})` : `추가 서버 ${index + 1}`;
+    const label = server.description
+      ? `추가 서버 (${server.description})`
+      : `추가 서버 ${index + 1}`;
     rows.push({ label, value: server.endpointUrl });
   });
 
   return rows;
 }
 
-function findServerIndex(
-  servers: { descriptor: string }[],
-  keywords: string[]
-): number {
-  return servers.findIndex((server) => keywords.some((keyword) => server.descriptor.includes(keyword)));
+function findServerIndex(servers: { descriptor: string }[], keywords: string[]): number {
+  return servers.findIndex((server) =>
+    keywords.some((keyword) => server.descriptor.includes(keyword))
+  );
 }
 
 function buildEndpointUrl(baseUrl: string, endpointPath: string): string {
@@ -963,74 +1026,99 @@ function applyBlockOutline(
   }
   const leftCol = columns[0];
   const rightCol = columns[columns.length - 1];
+  if (!leftCol || !rightCol) {
+    return;
+  }
 
   // 먼저 모든 행을 순회하면서 외곽 테두리 적용
   for (let r = startRow; r <= endRow; r++) {
-    const isTopRow = r === startRow;
-    const isBottomRow = r === endRow;
-
-    if (columns.length === 1) {
-      const cell = sheet.getCell(`${leftCol}${r}`);
-      cell.border = {
-        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-        left: THICK_BORDER.left,
-        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-        right: THICK_BORDER.right,
-      };
-      continue;
-    }
-
-    const leftCell = sheet.getCell(`${leftCol}${r}`);
-    const rightCell = sheet.getCell(`${rightCol}${r}`);
-    const leftMaster = leftCell.isMerged ? leftCell.master : leftCell;
-    const rightMaster = rightCell.isMerged ? rightCell.master : rightCell;
-
-    if (leftMaster.address === rightMaster.address) {
-      leftMaster.border = {
-        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-        left: THICK_BORDER.left,
-        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-        right: THICK_BORDER.right,
-      };
-      continue;
-    }
-
-    leftMaster.border = {
-      top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-      left: THICK_BORDER.left, // 항상 굵은 왼쪽 테두리
-      bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-      right: { style: "thin" },
-    };
-
-    rightMaster.border = {
-      top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-      left: { style: "thin" },
-      bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-      right: THICK_BORDER.right, // 항상 굵은 오른쪽 테두리
-    };
-
-    const skipMasters = new Set([leftMaster.address, rightMaster.address]);
-    const processedMasters = new Set<string>();
-
-    // 중간 셀들에 상하 테두리만 적용
-    for (let c = 1; c < columns.length - 1; c++) {
-      const col = columns[c];
-      const cell = sheet.getCell(`${col}${r}`);
-      const master = cell.isMerged ? cell.master : cell;
-      if (skipMasters.has(master.address) || processedMasters.has(master.address)) {
-        continue;
-      }
-
-      const middleBorder: Partial<ExcelJS.Borders> = {
-        top: isTopRow ? THICK_BORDER.top : { style: "thin" },
-        left: { style: "thin" },
-        bottom: isBottomRow ? THICK_BORDER.bottom : { style: "thin" },
-        right: { style: "thin" },
-      };
-      master.border = middleBorder;
-      processedMasters.add(master.address);
-    }
+    applyBlockOutlineRow(sheet, columns, r, startRow, endRow, leftCol, rightCol);
   }
+}
+
+function applyBlockOutlineRow(
+  sheet: ExcelJS.Worksheet,
+  columns: string[],
+  row: number,
+  startRow: number,
+  endRow: number,
+  leftCol: string,
+  rightCol: string
+): void {
+  const isTopRow = row === startRow;
+  const isBottomRow = row === endRow;
+
+  if (columns.length === 1) {
+    const cell = getMasterCell(sheet, `${leftCol}${row}`);
+    cell.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, THICK_BORDER.right);
+    return;
+  }
+
+  const leftMaster = getMasterCell(sheet, `${leftCol}${row}`);
+  const rightMaster = getMasterCell(sheet, `${rightCol}${row}`);
+
+  if (leftMaster.address === rightMaster.address) {
+    leftMaster.border = buildRowBorder(
+      isTopRow,
+      isBottomRow,
+      THICK_BORDER.left,
+      THICK_BORDER.right
+    );
+    return;
+  }
+
+  leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, { style: "thin" });
+  rightMaster.border = buildRowBorder(isTopRow, isBottomRow, { style: "thin" }, THICK_BORDER.right);
+
+  applyMiddleCellBorders(sheet, columns, row, isTopRow, isBottomRow, leftMaster, rightMaster);
+}
+
+function applyMiddleCellBorders(
+  sheet: ExcelJS.Worksheet,
+  columns: string[],
+  row: number,
+  isTopRow: boolean,
+  isBottomRow: boolean,
+  leftMaster: ExcelJS.Cell,
+  rightMaster: ExcelJS.Cell
+): void {
+  const skipMasters = new Set([leftMaster.address, rightMaster.address]);
+  const processedMasters = new Set<string>();
+
+  for (let c = 1; c < columns.length - 1; c++) {
+    const col = columns[c];
+    const master = getMasterCell(sheet, `${col}${row}`);
+    if (skipMasters.has(master.address) || processedMasters.has(master.address)) {
+      continue;
+    }
+
+    master.border = buildRowBorder(isTopRow, isBottomRow, { style: "thin" }, { style: "thin" });
+    processedMasters.add(master.address);
+  }
+}
+
+function buildRowBorder(
+  isTopRow: boolean,
+  isBottomRow: boolean,
+  left: Partial<ExcelJS.Border> | undefined,
+  right: Partial<ExcelJS.Border> | undefined
+): Partial<ExcelJS.Borders> {
+  return {
+    top: isTopRow ? (THICK_BORDER.top ?? { style: "thin" }) : { style: "thin" },
+    left: left ?? { style: "thin" },
+    bottom: isBottomRow ? (THICK_BORDER.bottom ?? { style: "thin" }) : { style: "thin" },
+    right: right ?? { style: "thin" },
+  };
+}
+
+function getMasterCell(sheet: ExcelJS.Worksheet, address: string): ExcelJS.Cell {
+  const cell = sheet.getCell(address);
+  // Defensive: ExcelJS types allow `cell.master` to be undefined even when `isMerged` is true.
+  // Fallback to the cell itself if master is not available.
+  if (!cell.isMerged || !cell.master) {
+    return cell;
+  }
+  return cell.master;
 }
 
 function buildColumnRange(startCol: string, endCol: string): string[] {
