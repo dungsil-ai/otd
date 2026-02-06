@@ -15,6 +15,7 @@ import {
   type RequestBodyInfo,
   type ResponseInfo,
   type SampleInfo,
+  type SchemaPropertyInfo,
   type SecuritySchemeInfo,
   type XlsxData,
 } from "../models/types";
@@ -778,20 +779,7 @@ function writeRequestBodySection(
   row++;
 
   // 데이터
-  for (const prop of requestBody.properties) {
-    sheet.getCell(`B${row}`).value = prop.name;
-    sheet.getCell(`C${row}`).value = prop.type;
-    sheet.getCell(`D${row}`).value = prop.format ?? "";
-    sheet.getCell(`E${row}`).value = prop.required ? "O" : "";
-    sheet.getCell(`F${row}`).value = prop.description ?? "";
-
-    // 테두리 적용
-    for (const col of ["B", "C", "D", "E", "F", "G"]) {
-      applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
-    }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
-    row++;
-  }
+  row = writePropertiesRows(sheet, requestBody.properties, row, 0);
 
   return row;
 }
@@ -840,8 +828,26 @@ function writeResponseSection(
   row++;
 
   // 데이터
-  for (const prop of response.properties) {
-    sheet.getCell(`B${row}`).value = prop.name;
+  row = writePropertiesRows(sheet, response.properties, row, 0);
+
+  return row;
+}
+
+/**
+ * 속성 행을 재귀적으로 작성합니다.
+ * 중첩된 속성은 들여쓰기로 표현됩니다.
+ */
+function writePropertiesRows(
+  sheet: ExcelJS.Worksheet,
+  properties: SchemaPropertyInfo[],
+  startRow: number,
+  depth: number
+): number {
+  let row = startRow;
+  const indent = "  ".repeat(depth);
+
+  for (const prop of properties) {
+    sheet.getCell(`B${row}`).value = depth > 0 ? `${indent}${prop.name}` : prop.name;
     sheet.getCell(`C${row}`).value = prop.type;
     sheet.getCell(`D${row}`).value = prop.format ?? "";
     sheet.getCell(`E${row}`).value = prop.required ? "O" : "";
@@ -853,6 +859,11 @@ function writeResponseSection(
     }
     sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
     row++;
+
+    // 중첩 속성이 있으면 재귀적으로 작성
+    if (prop.children && prop.children.length > 0) {
+      row = writePropertiesRows(sheet, prop.children, row, depth + 1);
+    }
   }
 
   return row;

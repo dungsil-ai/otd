@@ -101,6 +101,8 @@ export interface SchemaPropertyInfo {
   required: boolean;
   /** 설명 (선택) */
   description?: string;
+  /** 중첩 속성 목록 (object 또는 array<object>인 경우) */
+  children?: SchemaPropertyInfo[];
 }
 
 /**

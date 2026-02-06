@@ -10,9 +10,11 @@ import { extractEndpoints } from "../src/transformer/endpoint-extractor";
 
 describe("Endpoint Extractor", () => {
   let completeDoc: OpenAPIV3.Document;
+  let edgeCasesDoc: OpenAPIV3.Document;
 
   beforeAll(async () => {
     completeDoc = (await parseOpenApi("tests/fixtures/complete.yaml")) as OpenAPIV3.Document;
+    edgeCasesDoc = (await parseOpenApi("tests/fixtures/edge-cases.yaml")) as OpenAPIV3.Document;
   });
 
   describe("extractEndpoints", () => {
@@ -103,6 +105,87 @@ describe("Endpoint Extractor", () => {
       const apiKeyScheme = result.securitySchemes.find((s) => s.name === "ApiKeyAuth");
       expect(apiKeyScheme).toBeDefined();
       expect(apiKeyScheme?.type).toBe("apiKey");
+    });
+  });
+
+  describe("중첩 스키마 지원", () => {
+    it("array<object> 속성의 중첩 스키마를 children으로 추출해야 한다", () => {
+      // GET /users 200 응답: array<User> - (items)가 object이며 children 있어야 함
+      const result = extractEndpoints(completeDoc);
+      const usersGetEndpoint = result.endpoints.find(
+        (e) => e.path === "/users" && e.method === "GET"
+      );
+
+      const okResponse = usersGetEndpoint?.responses.find((r) => r.statusCode === "200");
+      expect(okResponse).toBeDefined();
+
+      // array 스키마의 (items) 속성에 children이 있어야 함
+      const itemsProp = okResponse?.properties.find((p) => p.name === "(items)");
+      expect(itemsProp).toBeDefined();
+      expect(itemsProp?.type).toBe("object");
+      expect(itemsProp?.children).toBeDefined();
+      expect(itemsProp?.children?.length).toBeGreaterThan(0);
+
+      // User 스키마의 속성이 children으로 포함되어야 함
+      const childNames = itemsProp?.children?.map((c) => c.name) ?? [];
+      expect(childNames).toContain("id");
+      expect(childNames).toContain("email");
+    });
+
+    it("중첩 object 속성의 스키마를 children으로 추출해야 한다", () => {
+      // edge-cases.yaml의 /complex/deep-nested: DeepNested 스키마
+      const result = extractEndpoints(edgeCasesDoc);
+      const deepNestedEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/deep-nested" && e.method === "POST"
+      );
+
+      const requestBody = deepNestedEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+
+      // level1은 object이므로 children이 있어야 함
+      const level1Prop = requestBody?.properties.find((p) => p.name === "level1");
+      expect(level1Prop).toBeDefined();
+      expect(level1Prop?.type).toBe("object");
+      expect(level1Prop?.children).toBeDefined();
+      expect(level1Prop?.children?.length).toBeGreaterThan(0);
+
+      // level2도 중첩된 children이 있어야 함
+      const level2Prop = level1Prop?.children?.find((c) => c.name === "level2");
+      expect(level2Prop).toBeDefined();
+      expect(level2Prop?.children).toBeDefined();
+    });
+
+    it("단순 배열 속성은 children이 없어야 한다", () => {
+      // Product.tags는 array<string>이므로 children이 없어야 함
+      const result = extractEndpoints(completeDoc);
+      const productsGetEndpoint = result.endpoints.find(
+        (e) => e.path === "/products" && e.method === "GET"
+      );
+
+      const okResponse = productsGetEndpoint?.responses.find((r) => r.statusCode === "200");
+      const itemsProp = okResponse?.properties.find((p) => p.name === "(items)");
+      expect(itemsProp?.children).toBeDefined();
+
+      // Product의 tags 필드는 array<string>이므로 children이 없어야 함
+      const tagsProp = itemsProp?.children?.find((c) => c.name === "tags");
+      expect(tagsProp).toBeDefined();
+      expect(tagsProp?.type).toBe("array<string>");
+      expect(tagsProp?.children).toBeUndefined();
+    });
+
+    it("응답의 중첩 스키마도 children으로 추출해야 한다", () => {
+      // /complex/deep-nested 200 응답
+      const result = extractEndpoints(edgeCasesDoc);
+      const deepNestedEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/deep-nested" && e.method === "POST"
+      );
+
+      const okResponse = deepNestedEndpoint?.responses.find((r) => r.statusCode === "200");
+      expect(okResponse).toBeDefined();
+
+      const level1Prop = okResponse?.properties.find((p) => p.name === "level1");
+      expect(level1Prop?.children).toBeDefined();
+      expect(level1Prop?.children?.length).toBeGreaterThan(0);
     });
   });
 });
