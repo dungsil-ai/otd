@@ -440,63 +440,140 @@ function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]):
     if (a.type !== b.type) return a.type.localeCompare(b.type);
     return (a.format ?? "").localeCompare(b.format ?? "");
   });
-  const parts = normalized.map((prop) =>
-    [
+  const parts = normalized.map((prop) => {
+    const base = [
       prop.name,
       prop.type,
       prop.format ?? "",
       prop.required ? "1" : "0",
       prop.description ?? "",
-    ].join("|")
-  );
+    ].join("|");
+    if (prop.children && prop.children.length > 0) {
+      return `${base}[${buildSchemaSignature("", prop.children)}]`;
+    }
+    return base;
+  });
   return `${schema}::${parts.join("||")}`;
+}
+
+/** 중첩 스키마 추출 최대 깊이 */
+const MAX_SCHEMA_DEPTH = 5;
+
+/**
+ * 배열 속성의 children을 추출합니다.
+ */
+function extractArrayChildren(
+  propSchema: OpenAPIV3.SchemaObject,
+  depth: number
+): SchemaPropertyInfo[] | undefined {
+  if (propSchema.type !== "array" || !propSchema.items) return undefined;
+
+  const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
+  const itemType = itemSchema.type ?? "object";
+
+  if (itemType === "object" && itemSchema.properties) {
+    return extractSchemaProperties(itemSchema, depth + 1);
+  }
+  return undefined;
+}
+
+/**
+ * 중첩 객체 속성의 children을 추출합니다.
+ */
+function extractObjectChildren(
+  propSchema: OpenAPIV3.SchemaObject,
+  depth: number
+): SchemaPropertyInfo[] | undefined {
+  const isObject = propSchema.type === "object" || !propSchema.type;
+  if (isObject && propSchema.properties) {
+    return extractSchemaProperties(propSchema, depth + 1);
+  }
+  return undefined;
 }
 
 /**
  * 스키마에서 속성 정보를 추출합니다.
+ * 중첩된 object 및 array<object> 스키마를 재귀적으로 추출합니다.
  */
-function extractSchemaProperties(schema: OpenAPIV3.SchemaObject | undefined): SchemaPropertyInfo[] {
-  if (!schema) return [];
+function extractSchemaProperties(
+  schema: OpenAPIV3.SchemaObject | undefined,
+  depth = 0
+): SchemaPropertyInfo[] {
+  if (!schema || depth > MAX_SCHEMA_DEPTH) return [];
 
   const properties: SchemaPropertyInfo[] = [];
-  const requiredFields = new Set(schema.required ?? []);
 
   // 객체 타입인 경우 properties 추출
   if (schema.properties) {
+    const requiredFields = new Set(schema.required ?? []);
     for (const [name, propSchemaOrRef] of Object.entries(schema.properties)) {
       const propSchema = propSchemaOrRef as OpenAPIV3.SchemaObject;
-
-      // 배열인 경우 타입을 array<itemType> 형태로 표시
-      let type: string = propSchema.type ?? "object";
-      if (propSchema.type === "array" && propSchema.items) {
-        const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
-        const itemType = itemSchema.type ?? "object";
-        type = `array<${itemType}>`;
-      }
-
-      properties.push({
-        name,
-        type,
-        format: propSchema.format,
-        required: requiredFields.has(name),
-        description: propSchema.description,
-      });
+      properties.push(extractSingleProperty(name, propSchema, requiredFields, depth));
     }
   }
 
   // 배열 타입인 경우 items 스키마 표시
   if (schema.type === "array" && schema.items) {
-    const itemSchema = schema.items as OpenAPIV3.SchemaObject;
-    properties.push({
-      name: "(items)",
-      type: itemSchema.type ?? "object",
-      format: itemSchema.format,
-      required: false,
-      description: itemSchema.description,
-    });
+    properties.push(extractArrayItemsProperty(schema.items as OpenAPIV3.SchemaObject, depth));
   }
 
   return properties;
+}
+
+/**
+ * 단일 속성 정보를 추출합니다.
+ */
+function extractSingleProperty(
+  name: string,
+  propSchema: OpenAPIV3.SchemaObject,
+  requiredFields: Set<string>,
+  depth: number
+): SchemaPropertyInfo {
+  let type: string = propSchema.type ?? "object";
+  if (propSchema.type === "array" && propSchema.items) {
+    const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
+    type = `array<${itemSchema.type ?? "object"}>`;
+  }
+
+  const children =
+    extractArrayChildren(propSchema, depth) ?? extractObjectChildren(propSchema, depth);
+
+  const prop: SchemaPropertyInfo = {
+    name,
+    type,
+    format: propSchema.format,
+    required: requiredFields.has(name),
+    description: propSchema.description,
+  };
+
+  if (children && children.length > 0) {
+    prop.children = children;
+  }
+
+  return prop;
+}
+
+/**
+ * 배열의 items 속성 정보를 추출합니다.
+ */
+function extractArrayItemsProperty(
+  itemSchema: OpenAPIV3.SchemaObject,
+  depth: number
+): SchemaPropertyInfo {
+  const prop: SchemaPropertyInfo = {
+    name: "(items)",
+    type: itemSchema.type ?? "object",
+    format: itemSchema.format,
+    required: false,
+    description: itemSchema.description,
+  };
+
+  const children = extractObjectChildren(itemSchema, depth);
+  if (children && children.length > 0) {
+    prop.children = children;
+  }
+
+  return prop;
 }
 
 /**

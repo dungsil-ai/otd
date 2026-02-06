@@ -26,5 +26,8 @@ Thumbs.db
 # Bun
 bun.lockb
 
+# npm
+package-lock.json
+
 # Test output
 coverage/
