@@ -736,7 +736,7 @@ function writeSingleParameterSection(
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
+    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
     row++;
   }
 
@@ -789,7 +789,7 @@ function writeRequestBodySection(
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
+    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
     row++;
   }
 
@@ -851,7 +851,7 @@ function writeResponseSection(
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center" };
+    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
     row++;
   }
 
