@@ -857,7 +857,13 @@ function writePropertiesRows(
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
+    const requiredCell = sheet.getCell(`E${row}`);
+    requiredCell.alignment = {
+      ...(CELL_STYLE.alignment ?? {}),
+      ...requiredCell.alignment,
+      horizontal: "center",
+      vertical: "middle",
+    };
     row++;
 
     // 중첩 속성이 있으면 재귀적으로 작성
