@@ -1,0 +1,79 @@
+name: Excel Preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/writer/**'
+      - 'src/transformer/**'
+      - 'src/models/**'
+      - 'tests/fixtures/complete.yaml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Excel from complete.yaml
+        run: bun run src/index.ts tests/fixtures/complete.yaml -o complete-preview.xlsx -f
+
+      - name: Upload Excel artifact
+        uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: complete-preview
+          path: complete-preview.xlsx
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '📊 **Excel 미리보기가 생성되었습니다**',
+              '',
+              `[complete-preview.xlsx 다운로드](${runUrl}#artifacts)`,
+              '',
+              `> \`tests/fixtures/complete.yaml\` 기반으로 생성됨 (Run: ${context.runId})`
+            ].join('\n');
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Excel 미리보기가 생성되었습니다')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

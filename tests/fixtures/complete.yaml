@@ -68,6 +68,51 @@ components:
           type: array
           items:
             type: string
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - items
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 주문 ID
+        userId:
+          type: integer
+          format: int64
+          description: 사용자 ID
+        address:
+          type: object
+          description: 배송 주소
+          properties:
+            city:
+              type: string
+              description: 도시
+            street:
+              type: string
+              description: 거리
+            zipCode:
+              type: string
+              description: 우편번호
+        items:
+          type: array
+          description: 주문 항목 목록
+          items:
+            type: object
+            properties:
+              productId:
+                type: integer
+                format: int64
+                description: 상품 ID
+              quantity:
+                type: integer
+                description: 수량
+              price:
+                type: number
+                format: float
+                description: 단가
     Error:
       type: object
       required:
@@ -218,6 +263,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+    patch:
+      tags:
+        - users
+      summary: 사용자 부분 수정
+      description: 사용자 정보를 부분적으로 수정합니다.
+      operationId: patchUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-Request-ID
+          in: header
+          required: false
+          description: 요청 추적 ID
+          schema:
+            type: string
+          example: "req-abc-123"
+        - name: session_id
+          in: cookie
+          required: false
+          description: 세션 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 사용자 이름
+            examples:
+              changeName:
+                summary: 이름 변경
+                value:
+                  name: "홍길동"
+              clearName:
+                summary: 이름 초기화
+                value:
+                  name: ""
+      responses:
+        "200":
+          description: 수정됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: 사용자를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       tags:
         - users
@@ -287,3 +392,88 @@ paths:
                 $ref: "#/components/schemas/Product"
         "404":
           description: 상품을 찾을 수 없음
+  /users/{id}/avatar:
+    post:
+      tags:
+        - users
+      summary: 프로필 이미지 업로드
+      description: 사용자 프로필 이미지를 업로드합니다.
+      operationId: uploadAvatar
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 이미지 파일
+                description:
+                  type: string
+                  description: 이미지 설명
+      responses:
+        "200":
+          description: 업로드 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    description: 업로드된 이미지 URL
+        "400":
+          description: 잘못된 파일 형식
+  /orders:
+    post:
+      tags:
+        - users
+      summary: 주문 생성
+      description: 새 주문을 생성합니다.
+      operationId: createOrder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Order"
+      responses:
+        "201":
+          description: 주문 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+              examples:
+                simpleOrder:
+                  summary: 단순 주문
+                  value:
+                    id: 1
+                    userId: 100
+                    address:
+                      city: "서울"
+                      street: "강남대로 1"
+                      zipCode: "06000"
+                    items:
+                      - productId: 1
+                        quantity: 2
+                        price: 15000
+        "400":
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
