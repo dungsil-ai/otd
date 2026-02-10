@@ -59,7 +59,7 @@ jobs:
               issue_number: context.issue.number,
             });
             const botComment = comments.find(c =>
-              c.user.type === 'Bot' && c.body.includes('Excel 미리보기가 생성되었습니다')
+              c.body && c.body.includes('Excel 미리보기가 생성되었습니다')
             );
 
             if (botComment) {

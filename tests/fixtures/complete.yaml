@@ -15,6 +15,8 @@ tags:
     description: 사용자 관리
   - name: products
     description: 상품 관리
+  - name: orders
+    description: 주문 관리
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -438,7 +440,7 @@ paths:
   /orders:
     post:
       tags:
-        - users
+        - orders
       summary: 주문 생성
       description: 새 주문을 생성합니다.
       operationId: createOrder
