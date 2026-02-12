@@ -460,41 +460,67 @@ function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]):
 const MAX_SCHEMA_DEPTH = 5;
 
 /**
- * allOf, oneOf, anyOf 조합 스키마를 병합하여 단일 스키마로 해소합니다.
+ * 조합 스키마의 하위 스키마 목록을 추출합니다.
  */
-function resolveComposedSchema(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject {
-  const composed = [
+function getComposedSubSchemas(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject[] {
+  return [
     ...((schema.allOf ?? []) as OpenAPIV3.SchemaObject[]),
     ...((schema.oneOf ?? []) as OpenAPIV3.SchemaObject[]),
     ...((schema.anyOf ?? []) as OpenAPIV3.SchemaObject[]),
   ];
+}
+
+/**
+ * 해소된 하위 스키마를 병합 대상에 반영합니다.
+ */
+function mergeResolvedSubSchema(
+  resolved: OpenAPIV3.SchemaObject,
+  target: {
+    properties: Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject>;
+    required: string[];
+    type: string | undefined;
+    items: OpenAPIV3.ArraySchemaObject["items"] | undefined;
+  }
+): void {
+  if (resolved.properties) {
+    Object.assign(target.properties, resolved.properties);
+  }
+  if (resolved.required) {
+    target.required.push(...resolved.required);
+  }
+  target.type ??= resolved.type;
+  target.items ??= "items" in resolved ? resolved.items : undefined;
+}
+
+/**
+ * allOf, oneOf, anyOf 조합 스키마를 병합하여 단일 스키마로 해소합니다.
+ */
+function resolveComposedSchema(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject {
+  const composed = getComposedSubSchemas(schema);
   if (composed.length === 0) return schema;
 
-  const mergedProperties: Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject> = {
-    ...(schema.properties ?? {}),
+  const target = {
+    properties: { ...(schema.properties ?? {}) } as Record<
+      string,
+      OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject
+    >,
+    required: [...(schema.required ?? [])],
+    type: schema.type as string | undefined,
+    items: ("items" in schema ? schema.items : undefined) as
+      | OpenAPIV3.ArraySchemaObject["items"]
+      | undefined,
   };
-  const mergedRequired: string[] = [...(schema.required ?? [])];
-  let type = schema.type;
-  let items = schema.items;
 
   for (const sub of composed) {
-    const resolved = resolveComposedSchema(sub);
-    if (resolved.properties) {
-      Object.assign(mergedProperties, resolved.properties);
-    }
-    if (resolved.required) {
-      mergedRequired.push(...resolved.required);
-    }
-    type ??= resolved.type;
-    items ??= resolved.items;
+    mergeResolvedSubSchema(resolveComposedSchema(sub), target);
   }
 
   return {
     ...schema,
-    ...(type ? { type } : {}),
-    ...(Object.keys(mergedProperties).length > 0 ? { properties: mergedProperties } : {}),
-    ...(mergedRequired.length > 0 ? { required: [...new Set(mergedRequired)] } : {}),
-    ...(items ? { items } : {}),
+    ...(target.type ? { type: target.type } : {}),
+    ...(Object.keys(target.properties).length > 0 ? { properties: target.properties } : {}),
+    ...(target.required.length > 0 ? { required: [...new Set(target.required)] } : {}),
+    ...(target.items ? { items: target.items } : {}),
   } as OpenAPIV3.SchemaObject;
 }
 
