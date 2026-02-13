@@ -48,11 +48,11 @@ jobs:
         with:
           script: |
             const artifactId = process.env.ARTIFACT_ID;
-            const downloadUrl = `${context.apiUrl}/repos/${context.repo.owner}/${context.repo.repo}/actions/artifacts/${artifactId}/zip`;
+            const downloadUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/artifacts/${artifactId}`;
             const body = [
               '📊 **Excel 미리보기가 생성되었습니다**',
               '',
-              `[📥 complete-preview.xlsx 다운로드 (zip)](${downloadUrl})`,
+              `[📥 complete-preview.xlsx 다운로드](${downloadUrl})`,
               '',
               `> \`tests/fixtures/complete.yaml\` 기반으로 생성됨 (Run: ${context.runId})`
             ].join('\n');
