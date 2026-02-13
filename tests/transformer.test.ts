@@ -212,6 +212,11 @@ describe("Endpoint Extractor", () => {
       const requestBody = oneOfEndpoint?.requestBodies[0];
       expect(requestBody).toBeDefined();
       expect(requestBody?.properties.length).toBeGreaterThan(0);
+
+      const propNames = requestBody?.properties.map((p) => p.name) ?? [];
+      expect(propNames).toContain("type");
+      expect(propNames).toContain("meow");
+      expect(propNames).toContain("bark");
     });
 
     it("allOf를 포함한 3단계 이상 중첩 스키마를 추출해야 한다", () => {
