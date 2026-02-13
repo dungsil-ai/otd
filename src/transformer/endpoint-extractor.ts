@@ -656,6 +656,10 @@ function schemaToString(schema: OpenAPIV3.SchemaObject | undefined): string {
   const resolved = resolveComposedSchema(schema);
 
   if (resolved.type === "array") {
+    // items가 없거나 잘못된 경우에도 안전하게 처리
+    if (!resolved.items || typeof resolved.items === "boolean") {
+      return "array<unknown>";
+    }
     const itemSchema = resolveComposedSchema(resolved.items as OpenAPIV3.SchemaObject);
     const itemType = itemSchema?.type ?? "object";
     return `array<${itemType}>`;
