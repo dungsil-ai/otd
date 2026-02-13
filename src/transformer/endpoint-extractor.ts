@@ -492,12 +492,15 @@ function mergeResolvedSubSchema(
   target.items ??= "items" in resolved ? resolved.items : undefined;
 }
 
+/** 조합 스키마 해소 최대 깊이 */
+const MAX_COMPOSED_DEPTH = 10;
+
 /**
  * allOf, oneOf, anyOf 조합 스키마를 병합하여 단일 스키마로 해소합니다.
  */
-function resolveComposedSchema(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject {
+function resolveComposedSchema(schema: OpenAPIV3.SchemaObject, depth = 0): OpenAPIV3.SchemaObject {
   const composed = getComposedSubSchemas(schema);
-  if (composed.length === 0) return schema;
+  if (composed.length === 0 || depth > MAX_COMPOSED_DEPTH) return schema;
 
   const target = {
     properties: { ...(schema.properties ?? {}) } as Record<
@@ -512,7 +515,7 @@ function resolveComposedSchema(schema: OpenAPIV3.SchemaObject): OpenAPIV3.Schema
   };
 
   for (const sub of composed) {
-    mergeResolvedSubSchema(resolveComposedSchema(sub), target);
+    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target);
   }
 
   return {
@@ -653,7 +656,7 @@ function schemaToString(schema: OpenAPIV3.SchemaObject | undefined): string {
   const resolved = resolveComposedSchema(schema);
 
   if (resolved.type === "array") {
-    const itemSchema = resolved.items as OpenAPIV3.SchemaObject | undefined;
+    const itemSchema = resolveComposedSchema(resolved.items as OpenAPIV3.SchemaObject);
     const itemType = itemSchema?.type ?? "object";
     return `array<${itemType}>`;
   }
