@@ -219,6 +219,28 @@ describe("Endpoint Extractor", () => {
       expect(propNames).toContain("bark");
     });
 
+    it("anyOf 스키마의 속성을 병합하되 required는 무시해야 한다", () => {
+      const result = extractEndpoints(edgeCasesDoc);
+      const anyOfEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/any-of" && e.method === "POST"
+      );
+
+      const requestBody = anyOfEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+      expect(requestBody?.properties.length).toBeGreaterThan(0);
+
+      const propNames = requestBody?.properties.map((p) => p.name) ?? [];
+      expect(propNames).toContain("width");
+      expect(propNames).toContain("height");
+      expect(propNames).toContain("radius");
+
+      // anyOf의 required는 병합되지 않아야 함
+      const widthProp = requestBody?.properties.find((p) => p.name === "width");
+      expect(widthProp?.required).toBe(false);
+      const radiusProp = requestBody?.properties.find((p) => p.name === "radius");
+      expect(radiusProp?.required).toBe(false);
+    });
+
     it("allOf를 포함한 3단계 이상 중첩 스키마를 추출해야 한다", () => {
       const result = extractEndpoints(edgeCasesDoc);
       const composedEndpoint = result.endpoints.find(

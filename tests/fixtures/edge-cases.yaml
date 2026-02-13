@@ -132,6 +132,25 @@ components:
               enum: [dog]
             bark:
               type: boolean
+    AnyOfExample:
+      anyOf:
+        - type: object
+          required:
+            - width
+          properties:
+            width:
+              type: number
+              description: 너비
+            height:
+              type: number
+              description: 높이
+        - type: object
+          required:
+            - radius
+          properties:
+            radius:
+              type: number
+              description: 반지름
     NullableFields:
       type: object
       properties:
@@ -330,6 +349,20 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/OneOfExample'
+      responses:
+        '200':
+          description: 성공
+
+  /complex/any-of:
+    post:
+      tags: [complex-schema]
+      summary: anyOf 스키마 테스트
+      operationId: postAnyOf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnyOfExample'
       responses:
         '200':
           description: 성공

@@ -472,6 +472,7 @@ function getComposedSubSchemas(schema: OpenAPIV3.SchemaObject): OpenAPIV3.Schema
 
 /**
  * 해소된 하위 스키마를 병합 대상에 반영합니다.
+ * mergeRequired가 false이면 required 필드를 병합하지 않습니다 (oneOf/anyOf).
  */
 function mergeResolvedSubSchema(
   resolved: OpenAPIV3.SchemaObject,
@@ -480,12 +481,13 @@ function mergeResolvedSubSchema(
     required: string[];
     type: string | undefined;
     items: OpenAPIV3.ArraySchemaObject["items"] | undefined;
-  }
+  },
+  mergeRequired: boolean
 ): void {
   if (resolved.properties) {
     Object.assign(target.properties, resolved.properties);
   }
-  if (resolved.required) {
+  if (mergeRequired && resolved.required) {
     target.required.push(...resolved.required);
   }
   target.type ??= resolved.type;
@@ -497,6 +499,8 @@ const MAX_COMPOSED_DEPTH = 10;
 
 /**
  * allOf, oneOf, anyOf 조합 스키마를 병합하여 단일 스키마로 해소합니다.
+ * allOf의 required만 병합하고, oneOf/anyOf의 required는 무시합니다.
+ * 반환 시 조합 키워드(allOf/oneOf/anyOf)를 제거하여 재병합을 방지합니다.
  */
 function resolveComposedSchema(schema: OpenAPIV3.SchemaObject, depth = 0): OpenAPIV3.SchemaObject {
   const composed = getComposedSubSchemas(schema);
@@ -514,12 +518,23 @@ function resolveComposedSchema(schema: OpenAPIV3.SchemaObject, depth = 0): OpenA
       | undefined,
   };
 
-  for (const sub of composed) {
-    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target);
+  // allOf: required 병합
+  for (const sub of (schema.allOf ?? []) as OpenAPIV3.SchemaObject[]) {
+    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target, true);
+  }
+  // oneOf/anyOf: required 무시 (대안 중 하나의 required가 전체에 적용되면 과도하게 엄격)
+  for (const sub of [
+    ...((schema.oneOf ?? []) as OpenAPIV3.SchemaObject[]),
+    ...((schema.anyOf ?? []) as OpenAPIV3.SchemaObject[]),
+  ]) {
+    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target, false);
   }
 
+  // 조합 키워드를 제거하여 재호출 시 재병합 방지
+  const { allOf: _allOf, oneOf: _oneOf, anyOf: _anyOf, ...rest } = schema;
+
   return {
-    ...schema,
+    ...rest,
     ...(target.type ? { type: target.type } : {}),
     ...(Object.keys(target.properties).length > 0 ? { properties: target.properties } : {}),
     ...(target.required.length > 0 ? { required: [...new Set(target.required)] } : {}),
