@@ -460,6 +460,89 @@ function buildSchemaSignature(schema: string, properties: SchemaPropertyInfo[]):
 const MAX_SCHEMA_DEPTH = 5;
 
 /**
+ * 조합 스키마의 하위 스키마 목록을 추출합니다.
+ */
+function getComposedSubSchemas(schema: OpenAPIV3.SchemaObject): OpenAPIV3.SchemaObject[] {
+  return [
+    ...((schema.allOf ?? []) as OpenAPIV3.SchemaObject[]),
+    ...((schema.oneOf ?? []) as OpenAPIV3.SchemaObject[]),
+    ...((schema.anyOf ?? []) as OpenAPIV3.SchemaObject[]),
+  ];
+}
+
+/**
+ * 해소된 하위 스키마를 병합 대상에 반영합니다.
+ * mergeRequired가 false이면 required 필드를 병합하지 않습니다 (oneOf/anyOf).
+ */
+function mergeResolvedSubSchema(
+  resolved: OpenAPIV3.SchemaObject,
+  target: {
+    properties: Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject>;
+    required: string[];
+    type: string | undefined;
+    items: OpenAPIV3.ArraySchemaObject["items"] | undefined;
+  },
+  mergeRequired: boolean
+): void {
+  if (resolved.properties) {
+    Object.assign(target.properties, resolved.properties);
+  }
+  if (mergeRequired && resolved.required) {
+    target.required.push(...resolved.required);
+  }
+  target.type ??= resolved.type;
+  target.items ??= "items" in resolved ? resolved.items : undefined;
+}
+
+/** 조합 스키마 해소 최대 깊이 */
+const MAX_COMPOSED_DEPTH = 10;
+
+/**
+ * allOf, oneOf, anyOf 조합 스키마를 병합하여 단일 스키마로 해소합니다.
+ * allOf의 required만 병합하고, oneOf/anyOf의 required는 무시합니다.
+ * 반환 시 조합 키워드(allOf/oneOf/anyOf)를 제거하여 재병합을 방지합니다.
+ */
+function resolveComposedSchema(schema: OpenAPIV3.SchemaObject, depth = 0): OpenAPIV3.SchemaObject {
+  const composed = getComposedSubSchemas(schema);
+  if (composed.length === 0 || depth > MAX_COMPOSED_DEPTH) return schema;
+
+  const target = {
+    properties: { ...(schema.properties ?? {}) } as Record<
+      string,
+      OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject
+    >,
+    required: [...(schema.required ?? [])],
+    type: schema.type as string | undefined,
+    items: ("items" in schema ? schema.items : undefined) as
+      | OpenAPIV3.ArraySchemaObject["items"]
+      | undefined,
+  };
+
+  // allOf: required 병합
+  for (const sub of (schema.allOf ?? []) as OpenAPIV3.SchemaObject[]) {
+    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target, true);
+  }
+  // oneOf/anyOf: required 무시 (대안 중 하나의 required가 전체에 적용되면 과도하게 엄격)
+  for (const sub of [
+    ...((schema.oneOf ?? []) as OpenAPIV3.SchemaObject[]),
+    ...((schema.anyOf ?? []) as OpenAPIV3.SchemaObject[]),
+  ]) {
+    mergeResolvedSubSchema(resolveComposedSchema(sub, depth + 1), target, false);
+  }
+
+  // 조합 키워드를 제거하여 재호출 시 재병합 방지
+  const { allOf: _allOf, oneOf: _oneOf, anyOf: _anyOf, ...rest } = schema;
+
+  return {
+    ...rest,
+    ...(target.type ? { type: target.type } : {}),
+    ...(Object.keys(target.properties).length > 0 ? { properties: target.properties } : {}),
+    ...(target.required.length > 0 ? { required: [...new Set(target.required)] } : {}),
+    ...(target.items ? { items: target.items } : {}),
+  } as OpenAPIV3.SchemaObject;
+}
+
+/**
  * 배열 속성의 children을 추출합니다.
  */
 function extractArrayChildren(
@@ -468,7 +551,7 @@ function extractArrayChildren(
 ): SchemaPropertyInfo[] | undefined {
   if (propSchema.type !== "array" || !propSchema.items) return undefined;
 
-  const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
+  const itemSchema = resolveComposedSchema(propSchema.items as OpenAPIV3.SchemaObject);
   const itemType = itemSchema.type ?? "object";
 
   if (itemType === "object" && itemSchema.properties) {
@@ -494,6 +577,7 @@ function extractObjectChildren(
 /**
  * 스키마에서 속성 정보를 추출합니다.
  * 중첩된 object 및 array<object> 스키마를 재귀적으로 추출합니다.
+ * allOf, oneOf, anyOf 조합 스키마도 지원합니다.
  */
 function extractSchemaProperties(
   schema: OpenAPIV3.SchemaObject | undefined,
@@ -501,20 +585,21 @@ function extractSchemaProperties(
 ): SchemaPropertyInfo[] {
   if (!schema || depth > MAX_SCHEMA_DEPTH) return [];
 
+  const resolved = resolveComposedSchema(schema);
   const properties: SchemaPropertyInfo[] = [];
 
   // 객체 타입인 경우 properties 추출
-  if (schema.properties) {
-    const requiredFields = new Set(schema.required ?? []);
-    for (const [name, propSchemaOrRef] of Object.entries(schema.properties)) {
+  if (resolved.properties) {
+    const requiredFields = new Set(resolved.required ?? []);
+    for (const [name, propSchemaOrRef] of Object.entries(resolved.properties)) {
       const propSchema = propSchemaOrRef as OpenAPIV3.SchemaObject;
       properties.push(extractSingleProperty(name, propSchema, requiredFields, depth));
     }
   }
 
   // 배열 타입인 경우 items 스키마 표시
-  if (schema.type === "array" && schema.items) {
-    properties.push(extractArrayItemsProperty(schema.items as OpenAPIV3.SchemaObject, depth));
+  if (resolved.type === "array" && resolved.items) {
+    properties.push(extractArrayItemsProperty(resolved.items as OpenAPIV3.SchemaObject, depth));
   }
 
   return properties;
@@ -529,21 +614,21 @@ function extractSingleProperty(
   requiredFields: Set<string>,
   depth: number
 ): SchemaPropertyInfo {
-  let type: string = propSchema.type ?? "object";
-  if (propSchema.type === "array" && propSchema.items) {
-    const itemSchema = propSchema.items as OpenAPIV3.SchemaObject;
+  const resolved = resolveComposedSchema(propSchema);
+  let type: string = resolved.type ?? "object";
+  if (resolved.type === "array" && resolved.items) {
+    const itemSchema = resolveComposedSchema(resolved.items as OpenAPIV3.SchemaObject);
     type = `array<${itemSchema.type ?? "object"}>`;
   }
 
-  const children =
-    extractArrayChildren(propSchema, depth) ?? extractObjectChildren(propSchema, depth);
+  const children = extractArrayChildren(resolved, depth) ?? extractObjectChildren(resolved, depth);
 
   const prop: SchemaPropertyInfo = {
     name,
     type,
-    format: propSchema.format,
+    format: resolved.format,
     required: requiredFields.has(name),
-    description: propSchema.description,
+    description: resolved.description,
   };
 
   if (children && children.length > 0) {
@@ -560,15 +645,16 @@ function extractArrayItemsProperty(
   itemSchema: OpenAPIV3.SchemaObject,
   depth: number
 ): SchemaPropertyInfo {
+  const resolved = resolveComposedSchema(itemSchema);
   const prop: SchemaPropertyInfo = {
     name: "(items)",
-    type: itemSchema.type ?? "object",
-    format: itemSchema.format,
+    type: resolved.type ?? "object",
+    format: resolved.format,
     required: false,
-    description: itemSchema.description,
+    description: resolved.description,
   };
 
-  const children = extractObjectChildren(itemSchema, depth);
+  const children = extractObjectChildren(resolved, depth);
   if (children && children.length > 0) {
     prop.children = children;
   }
@@ -582,21 +668,27 @@ function extractArrayItemsProperty(
 function schemaToString(schema: OpenAPIV3.SchemaObject | undefined): string {
   if (!schema) return "";
 
-  if (schema.type === "array") {
-    const itemSchema = schema.items as OpenAPIV3.SchemaObject | undefined;
+  const resolved = resolveComposedSchema(schema);
+
+  if (resolved.type === "array") {
+    // items가 없거나 잘못된 경우에도 안전하게 처리
+    if (!resolved.items || typeof resolved.items === "boolean") {
+      return "array<unknown>";
+    }
+    const itemSchema = resolveComposedSchema(resolved.items as OpenAPIV3.SchemaObject);
     const itemType = itemSchema?.type ?? "object";
     return `array<${itemType}>`;
   }
 
-  if (schema.type === "object") {
-    const propNames = Object.keys(schema.properties ?? {});
+  if (resolved.type === "object" || resolved.properties) {
+    const propNames = Object.keys(resolved.properties ?? {});
     if (propNames.length > 0) {
       return `object { ${propNames.slice(0, 3).join(", ")}${propNames.length > 3 ? ", ..." : ""} }`;
     }
     return "object";
   }
 
-  return schema.type ?? "unknown";
+  return resolved.type ?? "unknown";
 }
 
 /**

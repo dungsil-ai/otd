@@ -132,6 +132,25 @@ components:
               enum: [dog]
             bark:
               type: boolean
+    AnyOfExample:
+      anyOf:
+        - type: object
+          required:
+            - width
+          properties:
+            width:
+              type: number
+              description: 너비
+            height:
+              type: number
+              description: 높이
+        - type: object
+          required:
+            - radius
+          properties:
+            radius:
+              type: number
+              description: 반지름
     NullableFields:
       type: object
       properties:
@@ -146,6 +165,29 @@ components:
           nullable: true
           items:
             type: string
+    ComposedDeepNested:
+      allOf:
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer
+        - type: object
+          properties:
+            metadata:
+              type: object
+              properties:
+                nested:
+                  allOf:
+                    - type: object
+                      properties:
+                        deep:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                              description: allOf 3단계 이상 중첩 값
 
 paths:
   # 빈 경로 관련
@@ -310,6 +352,38 @@ paths:
       responses:
         '200':
           description: 성공
+
+  /complex/any-of:
+    post:
+      tags: [complex-schema]
+      summary: anyOf 스키마 테스트
+      operationId: postAnyOf
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnyOfExample'
+      responses:
+        '200':
+          description: 성공
+
+  /complex/composed-deep:
+    post:
+      tags: [complex-schema]
+      summary: allOf 3단계 이상 중첩 테스트
+      operationId: postComposedDeep
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComposedDeepNested'
+      responses:
+        '200':
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposedDeepNested'
 
   /complex/nullable:
     get:

@@ -187,5 +187,90 @@ describe("Endpoint Extractor", () => {
       expect(level1Prop?.children).toBeDefined();
       expect(level1Prop?.children?.length).toBeGreaterThan(0);
     });
+
+    it("allOf 스키마의 속성을 병합하여 추출해야 한다", () => {
+      const result = extractEndpoints(edgeCasesDoc);
+      const allOfEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/all-of" && e.method === "POST"
+      );
+
+      const requestBody = allOfEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+      expect(requestBody?.properties.length).toBeGreaterThan(0);
+
+      const propNames = requestBody?.properties.map((p) => p.name) ?? [];
+      expect(propNames).toContain("id");
+      expect(propNames).toContain("name");
+    });
+
+    it("oneOf 스키마의 속성을 병합하여 추출해야 한다", () => {
+      const result = extractEndpoints(edgeCasesDoc);
+      const oneOfEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/one-of" && e.method === "POST"
+      );
+
+      const requestBody = oneOfEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+      expect(requestBody?.properties.length).toBeGreaterThan(0);
+
+      const propNames = requestBody?.properties.map((p) => p.name) ?? [];
+      expect(propNames).toContain("type");
+      expect(propNames).toContain("meow");
+      expect(propNames).toContain("bark");
+    });
+
+    it("anyOf 스키마의 속성을 병합하되 required는 무시해야 한다", () => {
+      const result = extractEndpoints(edgeCasesDoc);
+      const anyOfEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/any-of" && e.method === "POST"
+      );
+
+      const requestBody = anyOfEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+      expect(requestBody?.properties.length).toBeGreaterThan(0);
+
+      const propNames = requestBody?.properties.map((p) => p.name) ?? [];
+      expect(propNames).toContain("width");
+      expect(propNames).toContain("height");
+      expect(propNames).toContain("radius");
+
+      // anyOf의 required는 병합되지 않아야 함
+      const widthProp = requestBody?.properties.find((p) => p.name === "width");
+      expect(widthProp?.required).toBe(false);
+      const radiusProp = requestBody?.properties.find((p) => p.name === "radius");
+      expect(radiusProp?.required).toBe(false);
+    });
+
+    it("allOf를 포함한 3단계 이상 중첩 스키마를 추출해야 한다", () => {
+      const result = extractEndpoints(edgeCasesDoc);
+      const composedEndpoint = result.endpoints.find(
+        (e) => e.path === "/complex/composed-deep" && e.method === "POST"
+      );
+
+      const requestBody = composedEndpoint?.requestBodies[0];
+      expect(requestBody).toBeDefined();
+
+      // allOf에서 병합된 id 속성
+      const idProp = requestBody?.properties.find((p) => p.name === "id");
+      expect(idProp).toBeDefined();
+      expect(idProp?.type).toBe("integer");
+
+      // metadata → nested (allOf) → deep → value
+      const metadataProp = requestBody?.properties.find((p) => p.name === "metadata");
+      expect(metadataProp).toBeDefined();
+      expect(metadataProp?.children).toBeDefined();
+
+      const nestedProp = metadataProp?.children?.find((c) => c.name === "nested");
+      expect(nestedProp).toBeDefined();
+      expect(nestedProp?.children).toBeDefined();
+
+      const deepProp = nestedProp?.children?.find((c) => c.name === "deep");
+      expect(deepProp).toBeDefined();
+      expect(deepProp?.children).toBeDefined();
+
+      const valueProp = deepProp?.children?.find((c) => c.name === "value");
+      expect(valueProp).toBeDefined();
+      expect(valueProp?.type).toBe("string");
+    });
   });
 });

@@ -8,7 +8,7 @@ import { AppError } from "../models/types";
 
 /** 버전 정보 */
 const VERSION = "1.0.0";
-const BUILD_DATE = "2026-02-06";
+const BUILD_DATE = "2026-02-13";
 
 /**
  * CLI 인자를 파싱합니다.

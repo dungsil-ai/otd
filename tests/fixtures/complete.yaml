@@ -126,6 +126,219 @@ components:
         message:
           type: string
           description: 오류 메시지
+    ShippingInfo:
+      type: object
+      required:
+        - orderId
+        - sender
+        - receiver
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          description: 주문 ID
+        sender:
+          type: object
+          description: 발송인 정보
+          properties:
+            name:
+              type: string
+              description: 발송인 이름
+            contact:
+              type: object
+              description: 연락처 정보
+              properties:
+                phone:
+                  type: string
+                  description: 전화번호
+                email:
+                  type: string
+                  format: email
+                  description: 이메일
+            address:
+              type: object
+              description: 발송지 주소
+              properties:
+                city:
+                  type: string
+                  description: 도시
+                street:
+                  type: string
+                  description: 거리
+                zipCode:
+                  type: string
+                  description: 우편번호
+                coordinates:
+                  type: object
+                  description: GPS 좌표
+                  properties:
+                    lat:
+                      type: number
+                      format: double
+                      description: 위도
+                    lng:
+                      type: number
+                      format: double
+                      description: 경도
+        receiver:
+          type: object
+          description: 수신인 정보
+          properties:
+            name:
+              type: string
+              description: 수신인 이름
+            address:
+              type: object
+              description: 배송지 주소
+              properties:
+                city:
+                  type: string
+                  description: 도시
+                street:
+                  type: string
+                  description: 거리
+                zipCode:
+                  type: string
+                  description: 우편번호
+                detail:
+                  type: object
+                  description: 상세 주소
+                  properties:
+                    building:
+                      type: string
+                      description: 건물명
+                    floor:
+                      type: integer
+                      description: 층
+                    room:
+                      type: string
+                      description: 호수
+        tracking:
+          type: object
+          description: 배송 추적 정보
+          properties:
+            carrier:
+              type: string
+              description: 배송 업체
+            trackingNumber:
+              type: string
+              description: 운송장 번호
+            history:
+              type: array
+              description: 배송 이력
+              items:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: 시간
+                  status:
+                    type: string
+                    description: 상태
+                  location:
+                    type: object
+                    description: 위치
+                    properties:
+                      name:
+                        type: string
+                        description: 장소명
+                      coordinates:
+                        type: object
+                        description: GPS 좌표
+                        properties:
+                          lat:
+                            type: number
+                            format: double
+                            description: 위도
+                          lng:
+                            type: number
+                            format: double
+                            description: 경도
+    UserWithProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            profile:
+              type: object
+              properties:
+                bio:
+                  type: string
+                  description: 자기소개
+                avatarUrl:
+                  type: string
+                  format: uri
+                  description: 프로필 이미지 URL
+    ProductSearchResult:
+      allOf:
+        - type: object
+          required:
+            - totalCount
+          properties:
+            totalCount:
+              type: integer
+              description: 전체 검색 결과 수
+            page:
+              type: integer
+              description: 현재 페이지
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Product"
+    PaymentMethod:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [card]
+            cardNumber:
+              type: string
+              description: 카드 번호
+            expiryDate:
+              type: string
+              description: 만료일
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [bank]
+            bankName:
+              type: string
+              description: 은행명
+            accountNumber:
+              type: string
+              description: 계좌번호
+    OrderWithPayment:
+      allOf:
+        - $ref: "#/components/schemas/Order"
+        - type: object
+          required:
+            - payment
+          properties:
+            payment:
+              $ref: "#/components/schemas/PaymentMethod"
+            coupon:
+              anyOf:
+                - type: object
+                  properties:
+                    code:
+                      type: string
+                      description: 쿠폰 코드
+                    discount:
+                      type: number
+                      description: 할인 금액
+                - type: object
+                  properties:
+                    code:
+                      type: string
+                      description: 쿠폰 코드
+                    discountRate:
+                      type: number
+                      description: 할인율 (%)
 paths:
   /users:
     get:
@@ -473,6 +686,186 @@ paths:
                       - productId: 1
                         quantity: 2
                         price: 15000
+        "400":
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /users/{id}/profile:
+    get:
+      tags:
+        - users
+      summary: 사용자 프로필 조회
+      description: 사용자 기본 정보와 프로필을 함께 조회합니다 (allOf).
+      operationId: getUserProfile
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithProfile"
+        "404":
+          description: 사용자를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /products/search:
+    get:
+      tags:
+        - products
+      summary: 상품 검색
+      description: 상품을 검색합니다 (allOf로 페이지네이션 + 목록 병합).
+      operationId: searchProducts
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 검색어
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 페이지 번호
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: 검색 결과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSearchResult"
+  /orders/with-payment:
+    post:
+      tags:
+        - orders
+      summary: 결제 정보 포함 주문 생성
+      description: 주문과 결제 정보를 함께 생성합니다 (allOf + oneOf + anyOf 조합).
+      operationId: createOrderWithPayment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderWithPayment"
+      responses:
+        "201":
+          description: 주문 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderWithPayment"
+        "400":
+          description: 잘못된 요청
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /orders/{id}/payment:
+    put:
+      tags:
+        - orders
+      summary: 결제 수단 변경
+      description: 주문의 결제 수단을 변경합니다 (oneOf).
+      operationId: updatePaymentMethod
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentMethod"
+      responses:
+        "200":
+          description: 결제 수단 변경됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentMethod"
+        "404":
+          description: 주문을 찾을 수 없음
+  /orders/{id}/shipping:
+    get:
+      tags:
+        - orders
+      summary: 배송 정보 조회
+      description: 주문의 배송 정보를 조회합니다 (3단계 이상 깊이의 중첩 객체).
+      operationId: getShippingInfo
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 주문 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShippingInfo"
+        "404":
+          description: 주문을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - orders
+      summary: 배송 정보 등록
+      description: 주문에 배송 정보를 등록합니다 (3단계 이상 깊이의 중첩 요청 본문).
+      operationId: createShippingInfo
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 주문 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShippingInfo"
+      responses:
+        "201":
+          description: 배송 정보 등록됨
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShippingInfo"
         "400":
           description: 잘못된 요청
           content:
