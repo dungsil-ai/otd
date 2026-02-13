@@ -599,7 +599,7 @@ function extractSingleProperty(
   const resolved = resolveComposedSchema(propSchema);
   let type: string = resolved.type ?? "object";
   if (resolved.type === "array" && resolved.items) {
-    const itemSchema = resolved.items as OpenAPIV3.SchemaObject;
+    const itemSchema = resolveComposedSchema(resolved.items as OpenAPIV3.SchemaObject);
     type = `array<${itemSchema.type ?? "object"}>`;
   }
 
