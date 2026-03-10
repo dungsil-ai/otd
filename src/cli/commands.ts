@@ -3,12 +3,16 @@
  * @module cli/commands
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CliOptions } from "../models/types";
 import { AppError } from "../models/types";
 
 /** 버전 정보 */
-const VERSION = "1.0.0";
-const BUILD_DATE = "2026-02-13";
+const DEFAULT_BUILD_DATE = "2026-03-10";
+const VERSION = process.env.npm_package_version ?? resolvePackageVersion();
+const BUILD_DATE = process.env.OTD_BUILD_DATE ?? DEFAULT_BUILD_DATE;
 
 /**
  * CLI 인자를 파싱합니다.
@@ -69,6 +73,30 @@ export function parseCliArgs(args: string[]): CliOptions {
   }
 
   return options;
+}
+
+function resolvePackageVersion(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+
+  while (true) {
+    const packageJsonPath = join(dir, "package.json");
+    if (existsSync(packageJsonPath)) {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        version?: string;
+      };
+      if (packageJson.version) {
+        return packageJson.version;
+      }
+    }
+
+    const parentDir = dirname(dir);
+    if (parentDir === dir) {
+      break;
+    }
+    dir = parentDir;
+  }
+
+  return "0.0.0";
 }
 
 type OptionParseResult =
