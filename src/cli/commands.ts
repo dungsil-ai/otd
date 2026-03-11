@@ -10,11 +10,20 @@ import type { CliOptions } from "../models/types";
 import { AppError } from "../models/types";
 
 /** 버전 정보 */
+declare const OTD_VERSION: string | undefined;
+declare const OTD_BUILD_DATE: string | undefined;
+
 const DEFAULT_VERSION = "1.0.0";
-const DEFAULT_BUILD_DATE = "2026-03-10";
+const DEFAULT_BUILD_DATE = "2026-03-11";
 const VERSION =
-  process.env.OTD_VERSION ?? process.env.npm_package_version ?? resolvePackageVersion();
-const BUILD_DATE = process.env.OTD_BUILD_DATE ?? DEFAULT_BUILD_DATE;
+  (typeof OTD_VERSION !== "undefined" ? OTD_VERSION : undefined) ??
+  process.env.OTD_VERSION ??
+  process.env.npm_package_version ??
+  resolvePackageVersion();
+const BUILD_DATE =
+  (typeof OTD_BUILD_DATE !== "undefined" ? OTD_BUILD_DATE : undefined) ??
+  process.env.OTD_BUILD_DATE ??
+  DEFAULT_BUILD_DATE;
 
 /**
  * CLI 인자를 파싱합니다.

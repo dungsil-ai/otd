@@ -19,18 +19,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       - name: Resolve and validate release tag
         run: |
-          PACKAGE_VERSION=$(bun --print "require('./package.json').version")
-
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             TAG_INPUT="${{ github.event.inputs.tag }}"
             if [ -z "$TAG_INPUT" ]; then
@@ -51,13 +41,26 @@ jobs:
             exit 1
           fi
 
-          TAG_VERSION="${TAG_NAME#v}"
+          echo "RELEASE_TAG=$TAG_NAME" >> "$GITHUB_ENV"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Validate tag against package version
+        run: |
+          PACKAGE_VERSION=$(bun --print "require('./package.json').version")
+          TAG_VERSION="${RELEASE_TAG#v}"
           if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)"
             exit 1
           fi
-
-          echo "RELEASE_TAG=$TAG_NAME" >> "$GITHUB_ENV"
 
       - name: Export build metadata
         run: |
