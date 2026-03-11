@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (must start with v)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -22,16 +27,37 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Validate tag version with package.json
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve and validate release tag
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
           PACKAGE_VERSION=$(bun --print "require('./package.json').version")
 
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG_INPUT="${{ github.event.inputs.tag }}"
+            if [ -z "$TAG_INPUT" ]; then
+              echo "workflow_dispatch requires the tag input"
+              exit 1
+            fi
+            if [[ ! "$TAG_INPUT" =~ ^v ]]; then
+              echo "Tag input must start with v (got: $TAG_INPUT)"
+              exit 1
+            fi
+            TAG_NAME="$TAG_INPUT"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ ! "$TAG_NAME" =~ ^v ]]; then
+            echo "Release tag must start with v (got: $TAG_NAME)"
+            exit 1
+          fi
+
+          TAG_VERSION="${TAG_NAME#v}"
           if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
             echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)"
             exit 1
           fi
+
+          echo "RELEASE_TAG=$TAG_NAME" >> "$GITHUB_ENV"
 
       - name: Export build metadata
         run: |
@@ -59,6 +85,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
             dist/*

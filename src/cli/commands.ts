@@ -10,8 +10,10 @@ import type { CliOptions } from "../models/types";
 import { AppError } from "../models/types";
 
 /** 버전 정보 */
+const DEFAULT_VERSION = "1.0.0";
 const DEFAULT_BUILD_DATE = "2026-03-10";
-const VERSION = process.env.npm_package_version ?? resolvePackageVersion();
+const VERSION =
+  process.env.OTD_VERSION ?? process.env.npm_package_version ?? resolvePackageVersion();
 const BUILD_DATE = process.env.OTD_BUILD_DATE ?? DEFAULT_BUILD_DATE;
 
 /**
@@ -81,11 +83,15 @@ function resolvePackageVersion(): string {
   while (true) {
     const packageJsonPath = join(dir, "package.json");
     if (existsSync(packageJsonPath)) {
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-        version?: string;
-      };
-      if (packageJson.version) {
-        return packageJson.version;
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+          version?: string;
+        };
+        if (packageJson.version) {
+          return packageJson.version;
+        }
+      } catch {
+        // Ignore unreadable or invalid package.json and continue traversing
       }
     }
 
@@ -96,7 +102,7 @@ function resolvePackageVersion(): string {
     dir = parentDir;
   }
 
-  return "0.0.0";
+  return DEFAULT_VERSION;
 }
 
 type OptionParseResult =
