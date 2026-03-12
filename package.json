@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "node scripts/build.mjs",
+    "build": "bun run scripts/build.mjs",
     "test": "bun test",
     "lint": "biome check .",
     "format": "biome format --write .",
