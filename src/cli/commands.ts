@@ -3,12 +3,60 @@
  * @module cli/commands
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CliOptions } from "../models/types";
 import { AppError } from "../models/types";
 
 /** 버전 정보 */
-const VERSION = "1.0.0";
-const BUILD_DATE = "2026-02-13";
+declare const OTD_VERSION: string | undefined;
+declare const OTD_BUILD_DATE: string | undefined;
+
+const DEFAULT_VERSION = "1.0.0";
+const DEFAULT_BUILD_DATE = getCurrentUtcDate();
+const VERSION = resolveVersion({
+  definedVersion: typeof OTD_VERSION !== "undefined" ? OTD_VERSION : undefined,
+  envVersion: process.env.OTD_VERSION,
+  npmPackageVersion: process.env.npm_package_version,
+  packageVersion: resolvePackageVersion(),
+});
+const BUILD_DATE = resolveBuildDate({
+  definedBuildDate: typeof OTD_BUILD_DATE !== "undefined" ? OTD_BUILD_DATE : undefined,
+  envBuildDate: process.env.OTD_BUILD_DATE,
+});
+
+export function resolveVersion(params?: {
+  definedVersion?: string;
+  envVersion?: string;
+  npmPackageVersion?: string;
+  packageVersion?: string;
+}): string {
+  return (
+    params?.definedVersion ??
+    params?.envVersion ??
+    params?.npmPackageVersion ??
+    params?.packageVersion ??
+    DEFAULT_VERSION
+  );
+}
+
+export function resolveBuildDate(params?: {
+  definedBuildDate?: string;
+  envBuildDate?: string;
+  fallbackBuildDate?: string;
+}): string {
+  return (
+    params?.definedBuildDate ??
+    params?.envBuildDate ??
+    params?.fallbackBuildDate ??
+    DEFAULT_BUILD_DATE
+  );
+}
+
+function getCurrentUtcDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 /**
  * CLI 인자를 파싱합니다.
@@ -69,6 +117,38 @@ export function parseCliArgs(args: string[]): CliOptions {
   }
 
   return options;
+}
+
+function resolvePackageVersion(): string {
+  return resolvePackageVersionFrom(dirname(fileURLToPath(import.meta.url)));
+}
+
+export function resolvePackageVersionFrom(startDir: string): string {
+  let dir = startDir;
+
+  while (true) {
+    const packageJsonPath = join(dir, "package.json");
+    if (existsSync(packageJsonPath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+          version?: string;
+        };
+        if (packageJson.version) {
+          return packageJson.version;
+        }
+      } catch {
+        // Ignore unreadable or invalid package.json and continue traversing
+      }
+    }
+
+    const parentDir = dirname(dir);
+    if (parentDir === dir) {
+      break;
+    }
+    dir = parentDir;
+  }
+
+  return DEFAULT_VERSION;
 }
 
 type OptionParseResult =
