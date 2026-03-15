@@ -3,8 +3,17 @@
  * @module tests/cli.test
  */
 
-import { describe, expect, it } from "bun:test";
-import { parseCliArgs, resolveOutputPath } from "../src/cli/commands";
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  parseCliArgs,
+  resolveBuildDate,
+  resolveOutputPath,
+  resolvePackageVersionFrom,
+  resolveVersion,
+} from "../src/cli/commands";
 import { AppError } from "../src/models/types";
 
 describe("CLI Commands", () => {
@@ -91,6 +100,72 @@ describe("CLI Commands", () => {
       expect(options2.outputPath).toBe("output.xlsx");
       expect(options1.force).toBe(true);
       expect(options2.force).toBe(true);
+    });
+  });
+
+  describe("version/build metadata resolution", () => {
+    const tempDirs: string[] = [];
+
+    afterEach(() => {
+      for (const dir of tempDirs) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+      tempDirs.length = 0;
+    });
+
+    it("resolveVersion should prefer defined value over env/npm/package fallback", () => {
+      const version = resolveVersion({
+        definedVersion: "9.9.9",
+        envVersion: "8.8.8",
+        npmPackageVersion: "7.7.7",
+        packageVersion: "6.6.6",
+      });
+
+      expect(version).toBe("9.9.9");
+    });
+
+    it("resolveVersion should use package version before default", () => {
+      const version = resolveVersion({
+        packageVersion: "2.3.4",
+      });
+
+      expect(version).toBe("2.3.4");
+    });
+
+    it("resolveBuildDate should prefer defined value over env/fallback", () => {
+      const buildDate = resolveBuildDate({
+        definedBuildDate: "2030-01-03",
+        envBuildDate: "2030-01-02",
+        fallbackBuildDate: "2030-01-01",
+      });
+
+      expect(buildDate).toBe("2030-01-03");
+    });
+
+    it("resolvePackageVersionFrom should traverse parent directories", () => {
+      const root = mkdtempSync(join(tmpdir(), "otd-cli-version-"));
+      tempDirs.push(root);
+      const nested = join(root, "a", "b", "c");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(join(root, "package.json"), JSON.stringify({ version: "4.5.6" }));
+
+      const version = resolvePackageVersionFrom(nested);
+
+      expect(version).toBe("4.5.6");
+    });
+
+    it("resolvePackageVersionFrom should ignore invalid package.json and continue", () => {
+      const root = mkdtempSync(join(tmpdir(), "otd-cli-version-"));
+      tempDirs.push(root);
+      const parent = join(root, "parent");
+      const nested = join(parent, "child");
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(join(parent, "package.json"), "{ invalid json ");
+      writeFileSync(join(root, "package.json"), JSON.stringify({ version: "5.6.7" }));
+
+      const version = resolvePackageVersionFrom(nested);
+
+      expect(version).toBe("5.6.7");
     });
   });
 

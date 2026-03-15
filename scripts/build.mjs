@@ -23,5 +23,8 @@ const result = spawnSync(
 );
 
 if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+  if (result.error) {
+    console.error("Failed to run 'bun':", result.error);
+  }
+  process.exit(typeof result.status === "number" ? result.status : 1);
 }
