@@ -82,6 +82,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Build executables
+        run: bun run build:exe
+
       - name: Package build artifacts
         run: tar -czf openapi-to-document-v${OTD_VERSION}.tar.gz dist/
 
@@ -91,7 +94,12 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
-            dist/*
+            dist/index.js
+            dist/exe/otd-linux-x64
+            dist/exe/otd-linux-arm64
+            dist/exe/otd-darwin-x64
+            dist/exe/otd-darwin-arm64
+            dist/exe/otd-windows-x64.exe
             openapi-to-document-v${{ env.OTD_VERSION }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

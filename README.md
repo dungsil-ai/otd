@@ -16,7 +16,40 @@
 
 ## 설치
 
-### Bun 사용 (권장)
+### 글로벌 설치 (권장)
+
+> [!NOTE]
+> 글로벌 설치를 위해 [Bun](https://bun.sh/) 런타임이 필요합니다.
+
+```bash
+# GitHub에서 직접 글로벌 설치
+bun install -g github:dungsil-ai/otd
+
+# 설치 후 어디서든 사용 가능
+otd openapi.yaml
+```
+
+### 설치 없이 바로 실행
+
+```bash
+# bunx로 설치 없이 바로 실행
+bunx github:dungsil-ai/otd openapi.yaml
+bunx github:dungsil-ai/otd openapi.yaml -o api-spec.xlsx
+```
+
+### 실행 파일 다운로드
+
+[GitHub Releases](https://github.com/dungsil-ai/otd/releases)에서 OS별 실행 파일을 다운로드할 수 있습니다. Bun 설치가 필요 없습니다.
+
+| 플랫폼 | 파일명 |
+|--------|--------|
+| Linux x64 | `otd-linux-x64` |
+| Linux ARM64 | `otd-linux-arm64` |
+| macOS x64 (Intel) | `otd-darwin-x64` |
+| macOS ARM64 (Apple Silicon) | `otd-darwin-arm64` |
+| Windows x64 | `otd-windows-x64.exe` |
+
+### 소스에서 설치 (개발용)
 
 ```bash
 # 저장소 클론
@@ -25,12 +58,9 @@ cd otd
 
 # 의존성 설치
 bun install
-```
 
-### npm 사용
-
-```bash
-npm install
+# 로컬에서 글로벌로 링크
+bun link
 ```
 
 ## 사용법
@@ -38,24 +68,27 @@ npm install
 ### 기본 사용
 
 ```bash
-# Bun으로 실행
-bun run src/index.ts <openapi-file>
+# 글로벌 설치 후
+otd <openapi-file>
 
 # 예시
-bun run src/index.ts api.yaml
+otd api.yaml
+
+# 또는 개발 모드로 실행
+bun run dev -- <openapi-file>
 ```
 
 ### 옵션
 
 ```bash
 # 출력 파일명 지정
-bun run src/index.ts api.yaml -o my-api-spec.xlsx
+otd api.yaml -o my-api-spec.xlsx
 
 # 기존 파일 덮어쓰기
-bun run src/index.ts api.yaml -o spec.xlsx -f
+otd api.yaml -o spec.xlsx -f
 
 # 도움말
-bun run src/index.ts --help
+otd --help
 ```
 
 ### 옵션 목록
