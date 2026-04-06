@@ -14,7 +14,7 @@ declare const OTD_VERSION: string | undefined;
 declare const OTD_BUILD_DATE: string | undefined;
 
 const DEFAULT_VERSION = "1.0.0";
-const DEFAULT_BUILD_DATE = getCurrentUtcDate();
+const DEFAULT_BUILD_DATE = "2026-04-06";
 const VERSION = resolveVersion({
   definedVersion: typeof OTD_VERSION !== "undefined" ? OTD_VERSION : undefined,
   envVersion: process.env.OTD_VERSION,
@@ -52,10 +52,6 @@ export function resolveBuildDate(params?: {
     params?.fallbackBuildDate ??
     DEFAULT_BUILD_DATE
   );
-}
-
-function getCurrentUtcDate(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /**
