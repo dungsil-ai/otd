@@ -64,8 +64,13 @@ jobs:
 
       - name: Export build metadata
         run: |
-          echo "OTD_VERSION=$(bun --print \"require('./package.json').version\")" >> "$GITHUB_ENV"
-          echo "OTD_BUILD_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
+          OTD_VERSION=$(bun --print "require('./package.json').version")
+          OTD_BUILD_DATE=$(date -u +%F)
+
+          {
+            echo "OTD_VERSION=$OTD_VERSION"
+            echo "OTD_BUILD_DATE=$OTD_BUILD_DATE"
+          } >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
