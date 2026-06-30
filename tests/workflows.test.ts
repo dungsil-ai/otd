@@ -133,6 +133,22 @@ function extractReleaseActionSteps(file: string): ReleaseActionStep[] {
   return steps;
 }
 
+function isDraftReleaseWithFiles(step: ReleaseActionStep): boolean {
+  return step.inputs.get("draft") === "true" && step.inputs.has("files");
+}
+
+function hasPublishDraftRunBlock(step: ReleaseActionStep): boolean {
+  return extractRunBlocks(step.file).some(
+    (block) =>
+      block.line > step.line &&
+      /\bgh\s+release\s+edit\b/.test(block.script) &&
+      /--draft=false\b/.test(block.script) &&
+      (step.inputs.get("prerelease") === "true"
+        ? /--prerelease\b/.test(block.script)
+        : !/--prerelease\b/.test(block.script))
+  );
+}
+
 describe("GitHub Actions workflows", () => {
   it("run blocks should be valid bash scripts", () => {
     const runBlocks = workflowFiles.flatMap(extractRunBlocks);
@@ -152,19 +168,30 @@ describe("GitHub Actions workflows", () => {
     }
   });
 
-  it("prerelease assets should be uploaded to draft releases", () => {
+  it("release assets should be uploaded to draft releases", () => {
     const releaseSteps = workflowFiles.flatMap(extractReleaseActionSteps);
-    const unsafePrereleases = releaseSteps.filter(
-      (step) =>
-        step.inputs.get("prerelease") === "true" &&
-        step.inputs.has("files") &&
-        step.inputs.get("draft") !== "true"
+    const unsafeReleases = releaseSteps.filter(
+      (step) => step.inputs.has("files") && step.inputs.get("draft") !== "true"
     );
 
     expect(
-      unsafePrereleases,
-      unsafePrereleases
-        .map((step) => `${step.file}:${step.line} uses prerelease assets without draft: true`)
+      unsafeReleases,
+      unsafeReleases
+        .map((step) => `${step.file}:${step.line} uploads release assets without draft: true`)
+        .join("\n")
+    ).toEqual([]);
+  });
+
+  it("draft release assets should be published after upload", () => {
+    const releaseSteps = workflowFiles.flatMap(extractReleaseActionSteps);
+    const unpublishedDrafts = releaseSteps
+      .filter(isDraftReleaseWithFiles)
+      .filter((step) => !hasPublishDraftRunBlock(step));
+
+    expect(
+      unpublishedDrafts,
+      unpublishedDrafts
+        .map((step) => `${step.file}:${step.line} creates a draft release without publishing it`)
         .join("\n")
     ).toEqual([]);
   });

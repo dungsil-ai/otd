@@ -72,3 +72,9 @@ jobs:
             openapi-to-document-${{ env.NIGHTLY_TAG }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Nightly Release
+        run: |
+          gh release edit "$NIGHTLY_TAG" --draft=false --prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
