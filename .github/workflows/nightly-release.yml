@@ -60,6 +60,7 @@ jobs:
           tag_name: ${{ env.NIGHTLY_TAG }}
           name: Nightly ${{ env.NIGHTLY_TAG }}
           prerelease: true
+          draft: true
           generate_release_notes: true
           files: |
             dist/index.js
