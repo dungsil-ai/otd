@@ -4,7 +4,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-15
 
 ## Active Technologies
 
-- TypeScript 5.x (strict mode) (001-openapi-xlsx-export)
+- TypeScript 5.x (strict mode)
 
 ## Project Structure
 
