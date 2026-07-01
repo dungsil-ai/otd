@@ -1,0 +1,156 @@
+/**
+ * 정적 HTML 변환기 E2E 테스트
+ * @module tests/static.e2e.test
+ */
+
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { $ } from "bun";
+import type { Browser } from "playwright";
+import { chromium } from "playwright";
+
+type Fixture =
+  | {
+      name: string;
+      expectedEndpoints: number | null;
+      shouldError: false;
+    }
+  | {
+      name: string;
+      expectedEndpoints: null;
+      shouldError: true;
+      expectedError: string;
+    };
+
+const FIXTURES: Fixture[] = [
+  { name: "minimal.yaml", expectedEndpoints: 1, shouldError: false },
+  { name: "complete.yaml", expectedEndpoints: 16, shouldError: false },
+  { name: "edge-cases.yaml", expectedEndpoints: 22, shouldError: false },
+  { name: "empty-paths.yaml", expectedEndpoints: 0, shouldError: false },
+  { name: "no-paths.yaml", expectedEndpoints: 0, shouldError: false },
+  { name: "large-100-endpoints.yaml", expectedEndpoints: 93, shouldError: false },
+  { name: "swagger-v2.yaml", expectedEndpoints: null, shouldError: true, expectedError: "v2" },
+];
+
+describe("Static HTML Converter E2E", () => {
+  let browser: Browser;
+  let server: ReturnType<typeof Bun.serve>;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    // dist 디렉토리가 없거나 필수 파일이 없으면 빌드
+    const distIndexHtml = join(process.cwd(), "dist", "index.html");
+    const distJs = join(process.cwd(), "dist", "openapi-to-document.js");
+    if (!existsSync(distIndexHtml) || !existsSync(distJs)) {
+      await $`bun run build`.quiet();
+    }
+
+    // dist 디렉토리를 정적으로 서빙하는 로컬 HTTP 서버 시작
+    server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+        const fullPath = join(process.cwd(), "dist", pathname);
+        const file = Bun.file(fullPath);
+        return new Response(file);
+      },
+    });
+
+    baseUrl = `http://localhost:${server.port}`;
+
+    // 헤드리스 브라우저 실행
+    browser = await chromium.launch({ headless: true });
+  }, 60_000);
+
+  afterAll(async () => {
+    await browser.close();
+    server.stop();
+  });
+
+  for (const fixture of FIXTURES) {
+    if (fixture.shouldError) {
+      it(`${fixture.name}: 오류 메시지를 표시해야 한다`, async () => {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+
+        try {
+          await page.goto(baseUrl);
+
+          const content = readFileSync(
+            join(process.cwd(), "tests/fixtures", fixture.name),
+            "utf-8"
+          );
+
+          await page.fill("#sourceText", content);
+          await page.click("#convertBtn");
+
+          await page.waitForFunction(
+            () => {
+              const el = document.getElementById("status");
+              return el?.textContent?.startsWith("오류");
+            },
+            { timeout: 30_000 }
+          );
+
+          const status = await page.textContent("#status");
+          expect(status).toContain("오류");
+          expect(status).toContain(fixture.expectedError);
+        } finally {
+          await context.close();
+        }
+      }, 60_000);
+    } else {
+      it(`${fixture.name}: XLSX 변환에 성공해야 한다`, async () => {
+        const context = await browser.newContext({ acceptDownloads: true });
+        const page = await context.newPage();
+
+        try {
+          await page.goto(baseUrl);
+
+          const content = readFileSync(
+            join(process.cwd(), "tests/fixtures", fixture.name),
+            "utf-8"
+          );
+
+          await page.fill("#sourceText", content);
+
+          // 다운로드와 버튼 클릭을 동시에 대기
+          const [download] = await Promise.all([
+            page.waitForEvent("download", { timeout: 60_000 }),
+            page.click("#convertBtn"),
+          ]);
+
+          // 변환 완료 상태 대기
+          await page.waitForFunction(
+            () => {
+              const el = document.getElementById("status");
+              return el?.textContent?.startsWith("변환 완료");
+            },
+            { timeout: 60_000 }
+          );
+
+          const status = await page.textContent("#status");
+          expect(status).toContain("변환 완료");
+
+          if (fixture.expectedEndpoints !== null) {
+            expect(status).toContain(`${fixture.expectedEndpoints}개`);
+          }
+
+          // 다운로드된 파일 검증
+          expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
+
+          const downloadPath = await download.path();
+          expect(downloadPath).not.toBeNull();
+          if (downloadPath !== null) {
+            const downloadedFile = Bun.file(downloadPath);
+            expect(downloadedFile.size).toBeGreaterThan(0);
+          }
+        } finally {
+          await context.close();
+        }
+      }, 120_000);
+    }
+  }
+});

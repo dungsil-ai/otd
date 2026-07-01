@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 
 import SwaggerParser from "@apidevtools/swagger-parser";
+import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
 import { createWorkbook } from "../writer/xlsx-writer";
@@ -54,14 +55,8 @@ convertButton.addEventListener("click", async () => {
 });
 
 async function parseOpenApiFromText(raw: string): Promise<OpenAPI.Document> {
-  const blob = new Blob([raw], { type: "text/plain" });
-  const blobUrl = URL.createObjectURL(blob);
-
-  try {
-    return (await SwaggerParser.dereference(blobUrl)) as OpenAPI.Document;
-  } finally {
-    URL.revokeObjectURL(blobUrl);
-  }
+  const parsed = jsYaml.load(raw) as OpenAPI.Document;
+  return (await SwaggerParser.dereference(parsed)) as OpenAPI.Document;
 }
 
 function validateOpenApiDocument(api: OpenAPI.Document): OpenAPIV3.Document {
