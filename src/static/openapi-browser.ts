@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import SwaggerParser from "@apidevtools/swagger-parser";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";

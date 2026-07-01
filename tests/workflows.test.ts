@@ -204,9 +204,7 @@ describe("GitHub Actions workflows", () => {
 
     for (const file of releaseWorkflowFiles) {
       const content = readFileSync(join(process.cwd(), file), "utf8");
-      expect(content, `${file} should upload dist/openapi-to-document.html`).toContain(
-        "dist/openapi-to-document.html"
-      );
+      expect(content, `${file} should upload dist/index.html`).toContain("dist/index.html");
       expect(content, `${file} should upload dist/openapi-to-document.js`).toContain(
         "dist/openapi-to-document.js"
       );
