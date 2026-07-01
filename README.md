@@ -49,7 +49,7 @@ bunx github:dungsil-ai/otd openapi.yaml -o api-spec.xlsx
 | macOS x64 (Intel) | `otd-darwin-x64` |
 | macOS ARM64 (Apple Silicon) | `otd-darwin-arm64` |
 | Windows x64 | `otd-windows-x64.exe` |
-| Static Web Converter | `openapi-to-document.html`, `openapi-to-document.js` |
+| Static Web Converter | `index.html`, `openapi-to-document.js` |
 
 ### 소스에서 설치 (개발용)
 
