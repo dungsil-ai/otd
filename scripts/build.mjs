@@ -50,4 +50,4 @@ if (browserResult.status !== 0) {
 }
 
 mkdirSync("dist", { recursive: true });
-copyFileSync("src/static/openapi-to-document.html", "dist/openapi-to-document.html");
+copyFileSync("src/static/index.html", "dist/index.html");
