@@ -4,8 +4,6 @@
  * @module writer/xlsx-writer
  */
 
-import { existsSync } from "node:fs";
-import { dirname } from "node:path";
 import ExcelJS from "exceljs";
 import {
   AppError,
@@ -152,6 +150,7 @@ const THICK_BORDER: Partial<ExcelJS.Borders> = {
  * @throws {AppError} 파일 쓰기 오류
  */
 export async function writeXlsx(data: XlsxData, options: CliOptions): Promise<string> {
+  const { existsSync } = await import("node:fs");
   const outputPath = resolveOutputPath(options);
 
   // 파일 존재 여부 확인 (force 옵션 처리)
@@ -164,15 +163,7 @@ export async function writeXlsx(data: XlsxData, options: CliOptions): Promise<st
   }
 
   try {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "otd - OpenAPI To Document";
-    workbook.created = new Date();
-
-    // 시트 생성
-    createOverviewSheet(workbook, data);
-    createAuthSheet(workbook, data.securitySchemes);
-    createEndpointsSheet(workbook, data.endpoints);
-    createTagSheets(workbook, data);
+    const workbook = createWorkbook(data);
 
     // 파일 저장
     await workbook.xlsx.writeFile(outputPath);
@@ -189,6 +180,19 @@ export async function writeXlsx(data: XlsxData, options: CliOptions): Promise<st
       error instanceof Error ? error : undefined
     );
   }
+}
+
+export function createWorkbook(data: XlsxData): ExcelJS.Workbook {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "otd - OpenAPI To Document";
+  workbook.created = new Date();
+
+  createOverviewSheet(workbook, data);
+  createAuthSheet(workbook, data.securitySchemes);
+  createEndpointsSheet(workbook, data.endpoints);
+  createTagSheets(workbook, data);
+
+  return workbook;
 }
 
 // ============================================================================
@@ -216,9 +220,9 @@ function resolveOutputPath(options: CliOptions): string {
   }
 
   // 기본: 입력 파일과 동일한 위치, 동일한 이름
-  const inputDir = dirname(options.inputPath);
+  const inputDir = getDirectory(options.inputPath);
   const inputName = getFileNameWithoutExt(options.inputPath);
-  return inputDir === "." ? `${inputName}.xlsx` : `${inputDir}/${inputName}.xlsx`;
+  return inputDir ? `${inputDir}/${inputName}.xlsx` : `${inputName}.xlsx`;
 }
 
 /**
@@ -228,6 +232,12 @@ function getFileNameWithoutExt(filePath: string): string {
   const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
   const dotIndex = fileName.lastIndexOf(".");
   return dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
+}
+
+function getDirectory(filePath: string): string {
+  const lastSlash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  if (lastSlash === -1) return "";
+  return filePath.substring(0, lastSlash);
 }
 
 // ============================================================================

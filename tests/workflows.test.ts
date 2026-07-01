@@ -196,7 +196,7 @@ describe("GitHub Actions workflows", () => {
     ).toEqual([]);
   });
 
-  it("release workflows should include static html asset", () => {
+  it("release workflows should include static web converter assets", () => {
     const releaseWorkflowFiles = [
       ".github/workflows/release.yml",
       ".github/workflows/nightly-release.yml",
@@ -206,6 +206,9 @@ describe("GitHub Actions workflows", () => {
       const content = readFileSync(join(process.cwd(), file), "utf8");
       expect(content, `${file} should upload dist/openapi-to-document.html`).toContain(
         "dist/openapi-to-document.html"
+      );
+      expect(content, `${file} should upload dist/openapi-to-document.js`).toContain(
+        "dist/openapi-to-document.js"
       );
     }
   });

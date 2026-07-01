@@ -102,6 +102,7 @@ jobs:
           files: |
             dist/index.js
             dist/openapi-to-document.html
+            dist/openapi-to-document.js
             dist/exe/otd-linux-x64
             dist/exe/otd-linux-arm64
             dist/exe/otd-darwin-x64

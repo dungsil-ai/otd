@@ -29,5 +29,25 @@ if (result.status !== 0) {
   process.exit(typeof result.status === "number" ? result.status : 1);
 }
 
+const browserResult = spawnSync(
+  "bun",
+  [
+    "build",
+    "src/static/openapi-browser.ts",
+    "--target",
+    "browser",
+    "--outfile",
+    "dist/openapi-to-document.js",
+  ],
+  { stdio: "inherit" }
+);
+
+if (browserResult.status !== 0) {
+  if (browserResult.error) {
+    console.error("Failed to run browser build with 'bun':", browserResult.error);
+  }
+  process.exit(typeof browserResult.status === "number" ? browserResult.status : 1);
+}
+
 mkdirSync("dist", { recursive: true });
 copyFileSync("src/static/openapi-to-document.html", "dist/openapi-to-document.html");
