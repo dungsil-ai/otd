@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const version = process.env.OTD_VERSION ?? packageJson.version;
@@ -28,3 +28,6 @@ if (result.status !== 0) {
   }
   process.exit(typeof result.status === "number" ? result.status : 1);
 }
+
+mkdirSync("dist", { recursive: true });
+copyFileSync("src/static/openapi-to-document.html", "dist/openapi-to-document.html");

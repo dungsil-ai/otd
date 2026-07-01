@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OTD Static HTML Converter</title>
+    <style>
+      body {
+        max-width: 960px;
+        margin: 32px auto;
+        padding: 0 16px 32px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+        color: #1f2937;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      p {
+        margin-top: 0;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 16px 0;
+      }
+      textarea {
+        width: 100%;
+        min-height: 240px;
+        font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        padding: 10px;
+        box-sizing: border-box;
+      }
+      button {
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: #ffffff;
+        cursor: pointer;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th,
+      td {
+        border: 1px solid #e5e7eb;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f3f4f6;
+      }
+      .error {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>OpenAPI → 문서(HTML) 변환</h1>
+    <p>바이너리 설치 없이 브라우저에서 OpenAPI 문서를 간단히 표 형태로 변환합니다.</p>
+
+    <div class="controls">
+      <input id="fileInput" type="file" accept=".yaml,.yml,.json" />
+      <button type="button" id="convertBtn">변환</button>
+      <button type="button" id="downloadBtn">HTML 다운로드</button>
+    </div>
+
+    <textarea id="source" placeholder="OpenAPI YAML/JSON 내용을 붙여넣으세요."></textarea>
+    <p id="message"></p>
+    <div id="result"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script>
+      const fileInput = document.getElementById("fileInput");
+      const source = document.getElementById("source");
+      const result = document.getElementById("result");
+      const message = document.getElementById("message");
+      const convertBtn = document.getElementById("convertBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      fileInput.addEventListener("change", async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        source.value = await file.text();
+      });
+
+      convertBtn.addEventListener("click", () => {
+        try {
+          const doc = parseDocument(source.value);
+          const html = renderDocument(doc);
+          result.innerHTML = html;
+          message.textContent = "변환이 완료되었습니다.";
+          message.className = "";
+        } catch (error) {
+          result.innerHTML = "";
+          message.textContent = error instanceof Error ? error.message : String(error);
+          message.className = "error";
+        }
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        const body = result.innerHTML.trim();
+        if (!body) {
+          message.textContent = "먼저 변환을 실행하세요.";
+          message.className = "error";
+          return;
+        }
+
+        const content = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>OpenAPI Document</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:960px;margin:32px auto;padding:0 16px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f3f4f6}</style></head><body>${body}</body></html>`;
+        const blob = new Blob([content], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "openapi-document.html";
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      function parseDocument(raw) {
+        if (!raw.trim()) {
+          throw new Error("OpenAPI 문서를 입력하세요.");
+        }
+
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = window.jsyaml.load(raw);
+        }
+
+        if (!parsed || typeof parsed !== "object") {
+          throw new Error("OpenAPI 문서를 파싱할 수 없습니다.");
+        }
+
+        const openapiVersion = String(parsed.openapi ?? "");
+        if (!openapiVersion.startsWith("3.")) {
+          throw new Error("OpenAPI 3.x 문서만 지원합니다.");
+        }
+
+        return parsed;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function renderDocument(doc) {
+        const title = escapeHtml(doc.info?.title ?? "Untitled API");
+        const version = escapeHtml(doc.info?.version ?? "-");
+        const rows = [];
+        const methods = ["get", "post", "put", "patch", "delete", "options", "head"];
+
+        for (const [path, pathItem] of Object.entries(doc.paths ?? {})) {
+          if (!pathItem || typeof pathItem !== "object") continue;
+          for (const method of methods) {
+            const operation = pathItem[method];
+            if (!operation || typeof operation !== "object") continue;
+            rows.push(
+              `<tr><td>${method.toUpperCase()}</td><td>${escapeHtml(path)}</td><td>${escapeHtml(operation.summary ?? "-")}</td><td>${escapeHtml(operation.operationId ?? "-")}</td></tr>`
+            );
+          }
+        }
+
+        const tableRows = rows.length
+          ? rows.join("")
+          : '<tr><td colspan="4">표시할 엔드포인트가 없습니다.</td></tr>';
+
+        return `<h2>${title}</h2><p>버전: ${version}</p><table><thead><tr><th>Method</th><th>Path</th><th>Summary</th><th>Operation ID</th></tr></thead><tbody>${tableRows}</tbody></table>`;
+      }
+    </script>
+  </body>
+</html>

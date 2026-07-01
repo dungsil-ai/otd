@@ -9,6 +9,7 @@
 
 - ✅ **OpenAPI v3 지원**: OpenAPI 3.0.x 문서 파싱 및 변환
 - ✅ **XLSX 출력**: Excel 형식의 깔끔한 API 명세서 생성
+- ✅ **정적 HTML 변환기 배포**: 바이너리 없이 브라우저에서 간단 변환 가능
 - ✅ **샘플 데이터 자동 생성**: 스키마 기반 요청/응답 예시 JSON 생성
 - ✅ **다중 Content-Type 지원**: JSON, form-data, octet-stream 등 별도 분리
 - ✅ **파일 업로드 인식**: multipart, octet-stream은 첨부파일로 표시
@@ -48,6 +49,7 @@ bunx github:dungsil-ai/otd openapi.yaml -o api-spec.xlsx
 | macOS x64 (Intel) | `otd-darwin-x64` |
 | macOS ARM64 (Apple Silicon) | `otd-darwin-arm64` |
 | Windows x64 | `otd-windows-x64.exe` |
+| Static HTML | `openapi-to-document.html` |
 
 ### 소스에서 설치 (개발용)
 
