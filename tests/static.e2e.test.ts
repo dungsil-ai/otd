@@ -7,14 +7,17 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
+import ExcelJS from "exceljs";
 import type { Browser } from "playwright";
 import { chromium } from "playwright";
 
 type Fixture =
   | {
       name: string;
-      expectedEndpoints: number | null;
+      expectedEndpoints: number;
       shouldError: false;
+      expectedTitle: string;
+      expectedFirstEndpoint: { method: string; path: string } | null;
     }
   | {
       name: string;
@@ -24,12 +27,48 @@ type Fixture =
     };
 
 const FIXTURES: Fixture[] = [
-  { name: "minimal.yaml", expectedEndpoints: 1, shouldError: false },
-  { name: "complete.yaml", expectedEndpoints: 16, shouldError: false },
-  { name: "edge-cases.yaml", expectedEndpoints: 22, shouldError: false },
-  { name: "empty-paths.yaml", expectedEndpoints: 0, shouldError: false },
-  { name: "no-paths.yaml", expectedEndpoints: 0, shouldError: false },
-  { name: "large-100-endpoints.yaml", expectedEndpoints: 93, shouldError: false },
+  {
+    name: "minimal.yaml",
+    expectedEndpoints: 1,
+    shouldError: false,
+    expectedTitle: "Minimal API",
+    expectedFirstEndpoint: { method: "GET", path: "/health" },
+  },
+  {
+    name: "complete.yaml",
+    expectedEndpoints: 16,
+    shouldError: false,
+    expectedTitle: "Complete API",
+    expectedFirstEndpoint: { method: "GET", path: "/users" },
+  },
+  {
+    name: "edge-cases.yaml",
+    expectedEndpoints: 22,
+    shouldError: false,
+    expectedTitle: "Edge Cases API",
+    expectedFirstEndpoint: { method: "GET", path: "/" },
+  },
+  {
+    name: "empty-paths.yaml",
+    expectedEndpoints: 0,
+    shouldError: false,
+    expectedTitle: "Empty Paths API",
+    expectedFirstEndpoint: null,
+  },
+  {
+    name: "no-paths.yaml",
+    expectedEndpoints: 0,
+    shouldError: false,
+    expectedTitle: "No Paths API",
+    expectedFirstEndpoint: null,
+  },
+  {
+    name: "large-100-endpoints.yaml",
+    expectedEndpoints: 93,
+    shouldError: false,
+    expectedTitle: "Large API (100 Endpoints)",
+    expectedFirstEndpoint: { method: "GET", path: "/users" },
+  },
   { name: "swagger-v2.yaml", expectedEndpoints: null, shouldError: true, expectedError: "v2" },
 ];
 
@@ -133,19 +172,14 @@ describe("Static HTML Converter E2E", () => {
 
           const status = await page.textContent("#status");
           expect(status).toContain("변환 완료");
-
-          if (fixture.expectedEndpoints !== null) {
-            expect(status).toContain(`${fixture.expectedEndpoints}개`);
-          }
+          expect(status).toContain(`${fixture.expectedEndpoints}개`);
 
           // 다운로드된 파일 검증
           expect(download.suggestedFilename()).toMatch(/\.xlsx$/);
-
           const downloadPath = await download.path();
           expect(downloadPath).not.toBeNull();
           if (downloadPath !== null) {
-            const downloadedFile = Bun.file(downloadPath);
-            expect(downloadedFile.size).toBeGreaterThan(0);
+            await verifyXlsx(downloadPath, fixture);
           }
         } finally {
           await context.close();
@@ -154,3 +188,50 @@ describe("Static HTML Converter E2E", () => {
     }
   }
 });
+
+async function verifyXlsx(
+  filePath: string,
+  fixture: Extract<Fixture, { shouldError: false }>
+): Promise<void> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+
+  // 필수 시트 존재 확인
+  const sheetNames = workbook.worksheets.map((ws) => ws.name);
+  expect(sheetNames).toContain("개요");
+  expect(sheetNames).toContain("인증");
+  expect(sheetNames).toContain("API 항목");
+
+  // 개요 시트: API 제목 확인 (B2="속성"/C2="값" 헤더, B3="제목"/C3=title 데이터)
+  const overviewSheet = workbook.getWorksheet("개요");
+  expect(overviewSheet).toBeDefined();
+  if (overviewSheet) {
+    expect(overviewSheet.getCell("C3").value).toBe(fixture.expectedTitle);
+  }
+
+  verifyApiSheet(workbook, fixture);
+}
+
+function verifyApiSheet(
+  workbook: ExcelJS.Workbook,
+  fixture: Extract<Fixture, { shouldError: false }>
+): void {
+  const apiSheet = workbook.getWorksheet("API 항목");
+  expect(apiSheet).toBeDefined();
+  if (!apiSheet) return;
+
+  // 헤더는 row 2, 데이터는 row 3부터
+  let dataRowCount = 0;
+  apiSheet.eachRow((_row, rowNumber) => {
+    if (rowNumber >= 3 && apiSheet.getCell(`B${rowNumber}`).value !== null) {
+      dataRowCount++;
+    }
+  });
+  expect(dataRowCount).toBe(fixture.expectedEndpoints);
+
+  // 첫 번째 엔드포인트 실제 값 확인
+  if (fixture.expectedFirstEndpoint !== null) {
+    expect(apiSheet.getCell("B3").value).toBe(fixture.expectedFirstEndpoint.method);
+    expect(apiSheet.getCell("C3").value).toBe(fixture.expectedFirstEndpoint.path);
+  }
+}

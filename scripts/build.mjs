@@ -38,10 +38,6 @@ const browserResult = spawnSync(
     "browser",
     "--outfile",
     "dist/openapi-to-document.js",
-    "--banner",
-    // ExcelJS and json-schema-ref-parser reference the global Buffer.
-    // Polyfill it before any module code runs so browser builds work correctly.
-    "if(typeof globalThis.Buffer==='undefined'){globalThis.Buffer={isBuffer:function(v){return v!=null&&v._isBuffer===true},from:function(d,e){if(typeof d==='string'){const t=new TextEncoder();return t.encode(d);}return d instanceof Uint8Array?d:new Uint8Array(d);},alloc:function(n){return new Uint8Array(n)},concat:function(list){const total=list.reduce((s,b)=>s+b.length,0);const out=new Uint8Array(total);let off=0;for(const b of list){out.set(b,off);off+=b.length;}return out;}};}\n",
   ],
   { stdio: "inherit" }
 );

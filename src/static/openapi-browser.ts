@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 
+import "./buffer-polyfill";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
