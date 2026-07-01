@@ -86,7 +86,7 @@ function downloadXlsx(data: unknown, fileName: string): void {
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function setStatus(message: string, isError = false): void {
