@@ -6,6 +6,7 @@ import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
 import { createWorkbook } from "../writer/xlsx-writer";
+import { renderPreview } from "./openapi-preview";
 
 type UiState = {
   sourceName: string;
@@ -48,6 +49,7 @@ convertButton.addEventListener("click", async () => {
     const buffer = await workbook.xlsx.writeBuffer();
 
     downloadXlsx(buffer, `${uiState.sourceName || "openapi"}.xlsx`);
+    renderPreview(xlsxData, getElement<HTMLDivElement>("preview"));
     setStatus(`변환 완료: ${xlsxData.endpoints.length}개 API 항목`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
