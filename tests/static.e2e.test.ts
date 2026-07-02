@@ -87,7 +87,8 @@ describe("Static HTML Converter E2E", () => {
       fetch(req) {
         const url = new URL(req.url);
         const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-        const fullPath = join(process.cwd(), "dist", pathname);
+        const baseDir = pathname.startsWith("/fixtures/") ? "tests" : "dist";
+        const fullPath = join(process.cwd(), baseDir, pathname);
         const file = Bun.file(fullPath);
         return new Response(file);
       },
@@ -202,6 +203,92 @@ describe("Static HTML Converter E2E", () => {
 
       await page.fill("#sourceText", buildInlineOpenApi("두 번째 API", "/second"));
       await expectPreviewPath(page, "/second");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("content 쿼리 스트링으로 직접 입력 내용을 프리셋하고 미리 보기를 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      const content = buildInlineOpenApi("쿼리 프리셋 API", "/preset-content");
+      await page.goto(`${baseUrl}/?content=${encodeURIComponent(content)}`);
+
+      await expectPreviewPath(page, "/preset-content");
+      const textValue = await page.inputValue("#sourceText");
+      expect(textValue).toBe(content);
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("url 쿼리 스트링으로 URL 입력값을 프리셋하고 문서를 불러와야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      const presetUrl = `${baseUrl}/fixtures/minimal.yaml`;
+      await page.goto(`${baseUrl}/?url=${encodeURIComponent(presetUrl)}`);
+
+      await expectPreviewPath(page, "/health");
+      expect(await page.inputValue("#sourceUrl")).toBe(presetUrl);
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("URL로 불러온 내용을 수정해도 원본 기반 XLSX 파일명을 유지해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/minimal.yaml`);
+      await page.click("#loadUrlBtn");
+      await expectPreviewPath(page, "/health");
+
+      await page.fill("#sourceText", buildInlineOpenApi("수정된 API", "/edited-url"));
+      await expectPreviewPath(page, "/edited-url");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("URL 입력으로 OpenAPI 문서를 불러와 미리 보기와 XLSX 파일명을 갱신해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/minimal.yaml`);
+      await page.click("#loadUrlBtn");
+
+      await expectPreviewPath(page, "/health");
+      const status = await page.textContent("#status");
+      expect(status).toContain("미리 보기 업데이트 완료");
+
+      const textValue = await page.inputValue("#sourceText");
+      expect(textValue).toContain("Minimal API");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
     } finally {
       await context.close();
     }

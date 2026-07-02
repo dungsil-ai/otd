@@ -25,6 +25,8 @@ const uiState: UiState = {
 
 const sourceInput = getElement<HTMLInputElement>("sourceFile");
 const sourceText = getElement<HTMLTextAreaElement>("sourceText");
+const sourceUrlInput = getElement<HTMLInputElement>("sourceUrl");
+const loadUrlButton = getElement<HTMLButtonElement>("loadUrlBtn");
 const convertButton = getElement<HTMLButtonElement>("convertBtn");
 const statusText = getElement<HTMLParagraphElement>("status");
 const previewContainer = getElement<HTMLDivElement>("preview");
@@ -48,8 +50,24 @@ sourceInput.addEventListener("change", async () => {
 });
 
 sourceText.addEventListener("input", () => {
+  if (!sourceInput.files?.[0] && !sourceUrlInput.value.trim()) {
+    uiState.sourceName = "openapi";
+  }
   schedulePreviewUpdate();
 });
+
+sourceUrlInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadFromUrl();
+  }
+});
+
+loadUrlButton.addEventListener("click", () => {
+  void loadFromUrl();
+});
+
+void initializeFromQueryParams();
 
 convertButton.addEventListener("click", async () => {
   try {
@@ -78,6 +96,68 @@ convertButton.addEventListener("click", async () => {
     setStatus(`오류: ${message}`, true);
   }
 });
+
+async function initializeFromQueryParams(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  const presetUrl = params.get("url")?.trim();
+  const presetContent = params.get("content");
+
+  if (presetUrl) {
+    sourceUrlInput.value = presetUrl;
+  }
+
+  if (presetContent !== null) {
+    sourceText.value = presetContent;
+    uiState.sourceName = "openapi";
+    await updatePreview();
+    return;
+  }
+
+  if (presetUrl) {
+    await loadFromUrl();
+  }
+}
+
+async function loadFromUrl(): Promise<void> {
+  const rawUrl = sourceUrlInput.value.trim();
+  if (!rawUrl) {
+    setStatus("OpenAPI 문서 URL을 입력하세요.", true);
+    return;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    setStatus("올바른 URL 형식이 아닙니다.", true);
+    return;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    setStatus("HTTP 또는 HTTPS URL만 지원합니다.", true);
+    return;
+  }
+
+  try {
+    cancelPreviewUpdate();
+    resetPreview();
+    setStatus("URL에서 OpenAPI 문서를 불러오는 중...");
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+    }
+
+    sourceText.value = await response.text();
+    uiState.sourceName = getSourceNameFromUrl(url);
+    setStatus(`URL 로드 완료: ${url.href}`);
+    await updatePreview();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`URL 로드 오류: ${message}`, true);
+  }
+}
 
 async function updatePreview(): Promise<void> {
   const requestId = ++uiState.previewRequestId;
@@ -177,6 +257,11 @@ function getElement<T extends HTMLElement>(id: string): T {
     throw new Error(`필수 DOM 요소를 찾을 수 없습니다: #${id}`);
   }
   return element as T;
+}
+
+function getSourceNameFromUrl(url: URL): string {
+  const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+  return lastSegment ? getFileNameWithoutExt(lastSegment) : "openapi";
 }
 
 function getFileNameWithoutExt(fileName: string): string {
