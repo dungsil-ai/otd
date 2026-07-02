@@ -50,7 +50,9 @@ sourceInput.addEventListener("change", async () => {
 });
 
 sourceText.addEventListener("input", () => {
-  uiState.sourceName = "openapi";
+  if (!sourceInput.files?.[0] && !sourceUrlInput.value.trim()) {
+    uiState.sourceName = "openapi";
+  }
   schedulePreviewUpdate();
 });
 

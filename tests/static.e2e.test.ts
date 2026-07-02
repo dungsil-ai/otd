@@ -245,6 +245,29 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("URL로 불러온 내용을 수정해도 원본 기반 XLSX 파일명을 유지해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/minimal.yaml`);
+      await page.click("#loadUrlBtn");
+      await expectPreviewPath(page, "/health");
+
+      await page.fill("#sourceText", buildInlineOpenApi("수정된 API", "/edited-url"));
+      await expectPreviewPath(page, "/edited-url");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("URL 입력으로 OpenAPI 문서를 불러와 미리 보기와 XLSX 파일명을 갱신해야 한다", async () => {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
