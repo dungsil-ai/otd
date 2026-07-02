@@ -21,7 +21,7 @@
   "license": "MIT",
   "files": ["src", "scripts", "package.json", "tsconfig.json", "README.md"],
   "dependencies": {
-    "@apidevtools/swagger-parser": "^10.1.0",
+    "@apidevtools/swagger-parser": "^12.1.0",
     "exceljs": "^4.4.0",
     "openapi-sampler": "^1.7.4"
   },
