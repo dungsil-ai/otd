@@ -19,6 +19,11 @@
         gap: 10px;
         margin: 16px 0;
       }
+      .editor-preview-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
       textarea {
         width: 100%;
         min-height: 280px;
@@ -93,6 +98,7 @@
         padding: 5px 8px;
         text-align: left;
         vertical-align: top;
+        white-space: pre-wrap;
       }
       .preview-table thead th {
         background: #d9e2f3;
@@ -209,10 +215,11 @@
       <button id="convertBtn" type="button">XLSX 생성</button>
     </div>
 
-    <textarea id="sourceText" aria-label="OpenAPI 문서 내용" placeholder="OpenAPI YAML/JSON 내용을 붙여넣으세요."></textarea>
+    <div class="editor-preview-stack">
+      <textarea id="sourceText" aria-label="OpenAPI 문서 내용" placeholder="OpenAPI YAML/JSON 내용을 붙여넣으세요."></textarea>
+      <div id="preview" hidden></div>
+    </div>
     <p id="status"></p>
-
-    <div id="preview" hidden></div>
 
     <script type="module" src="./openapi-to-document.js"></script>
   </body>
