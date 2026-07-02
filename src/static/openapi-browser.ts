@@ -65,6 +65,8 @@ loadUrlButton.addEventListener("click", () => {
   void loadFromUrl();
 });
 
+void initializeFromQueryParams();
+
 convertButton.addEventListener("click", async () => {
   try {
     const raw = sourceText.value.trim();
@@ -92,6 +94,27 @@ convertButton.addEventListener("click", async () => {
     setStatus(`오류: ${message}`, true);
   }
 });
+
+async function initializeFromQueryParams(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  const presetUrl = params.get("url")?.trim();
+  const presetContent = params.get("content");
+
+  if (presetUrl) {
+    sourceUrlInput.value = presetUrl;
+  }
+
+  if (presetContent !== null) {
+    sourceText.value = presetContent;
+    uiState.sourceName = "openapi";
+    await updatePreview();
+    return;
+  }
+
+  if (presetUrl) {
+    await loadFromUrl();
+  }
+}
 
 async function loadFromUrl(): Promise<void> {
   const rawUrl = sourceUrlInput.value.trim();
