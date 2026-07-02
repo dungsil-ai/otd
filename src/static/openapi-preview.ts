@@ -133,7 +133,7 @@ function buildAuthSchemeBlock(scheme: SecuritySchemeInfo): string {
   if (scheme.in) details.push(["위치", scheme.in]);
   if (scheme.parameterName) details.push(["파라미터명", scheme.parameterName]);
   if (scheme.scheme) details.push(["스키마", scheme.scheme]);
-  if (scheme.bearerFormat) details.push([["B", "earer 형식"].join(""), scheme.bearerFormat]);
+  if (scheme.bearerFormat) details.push(["Bearer 형식", scheme.bearerFormat]);
   if (scheme.description) details.push(["설명", scheme.description]);
 
   const rowsHtml = details
