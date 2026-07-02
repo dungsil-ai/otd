@@ -213,11 +213,12 @@ describe("Static HTML Converter E2E", () => {
 
     try {
       await page.goto(baseUrl);
+      const multilineDescription = ["첫 줄", "둘째 줄"].join("\n");
 
       await page.setInputFiles("#sourceFile", {
         name: "inline.yaml",
         mimeType: "application/yaml",
-        buffer: Buffer.from(buildInlineOpenApi("첫 줄\n둘째 줄", "/uploaded")),
+        buffer: Buffer.from(buildInlineOpenApi(multilineDescription, "/uploaded")),
       });
 
       await expectPreviewPath(page, "/uploaded");
@@ -231,7 +232,7 @@ describe("Static HTML Converter E2E", () => {
         };
       });
 
-      expect(overviewDescriptionStyle?.text).toBe("첫 줄\n둘째 줄");
+      expect(overviewDescriptionStyle?.text).toBe(multilineDescription);
       expect(overviewDescriptionStyle?.whiteSpace).toContain("pre");
     } finally {
       await context.close();

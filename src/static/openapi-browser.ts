@@ -30,15 +30,21 @@ const statusText = getElement<HTMLParagraphElement>("status");
 const previewContainer = getElement<HTMLDivElement>("preview");
 
 sourceInput.addEventListener("change", async () => {
-  const file = sourceInput.files?.[0];
-  if (!file) {
-    return;
-  }
+  try {
+    const file = sourceInput.files?.[0];
+    if (!file) {
+      return;
+    }
 
-  uiState.sourceName = getFileNameWithoutExt(file.name);
-  sourceText.value = await file.text();
-  setStatus(`파일 로드 완료: ${file.name}`);
-  await updatePreview();
+    uiState.sourceName = getFileNameWithoutExt(file.name);
+    sourceText.value = await file.text();
+    setStatus(`파일 로드 완료: ${file.name}`);
+    await updatePreview();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`파일 로드 오류: ${message}`, true);
+  }
 });
 
 sourceText.addEventListener("input", () => {
@@ -52,7 +58,7 @@ convertButton.addEventListener("click", async () => {
       throw new Error("OpenAPI 문서 내용을 입력하세요.");
     }
 
-    clearPreviewTimer();
+    cancelPreviewUpdate();
     resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
     const xlsxData = await buildXlsxDataFromText(raw);
@@ -102,8 +108,14 @@ async function updatePreview(): Promise<void> {
 function schedulePreviewUpdate(): void {
   clearPreviewTimer();
   uiState.previewTimer = setTimeout(() => {
+    uiState.previewTimer = null;
     void updatePreview();
   }, PREVIEW_DEBOUNCE_MS);
+}
+
+function cancelPreviewUpdate(): void {
+  clearPreviewTimer();
+  uiState.previewRequestId++;
 }
 
 function clearPreviewTimer(): void {
