@@ -91,7 +91,9 @@ function getTagDisplayName(tagName: string, data: XlsxData): string {
 
 function buildOverviewContent(data: XlsxData): string {
   const servers = data.meta.servers
-    .map((s) => (s.description ? `${s.url} — ${s.description}` : s.url))
+    .map((s) =>
+      s.description ? `${escapeHtml(s.url)} — ${escapeHtml(s.description)}` : escapeHtml(s.url)
+    )
     .join("<br>");
 
   const rows: Array<[string, string]> = [
