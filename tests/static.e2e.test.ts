@@ -181,6 +181,9 @@ describe("Static HTML Converter E2E", () => {
           if (downloadPath !== null) {
             await verifyXlsx(downloadPath, fixture);
           }
+
+          // 미리 보기 렌더링 검증
+          await verifyPreview(page, fixture);
         } finally {
           await context.close();
         }
@@ -233,5 +236,44 @@ function verifyApiSheet(
   if (fixture.expectedFirstEndpoint !== null) {
     expect(apiSheet.getCell("B3").value).toBe(fixture.expectedFirstEndpoint.method);
     expect(apiSheet.getCell("C3").value).toBe(fixture.expectedFirstEndpoint.path);
+  }
+}
+
+async function verifyPreview(
+  page: import("playwright").Page,
+  fixture: Extract<Fixture, { shouldError: false }>
+): Promise<void> {
+  // 미리 보기 컨테이너가 표시되어야 한다
+  const isPreviewVisible = await page.evaluate(() => {
+    const el = document.getElementById("preview");
+    return el !== null && !el.hidden;
+  });
+  expect(isPreviewVisible).toBe(true);
+
+  // 최소 3개의 탭 버튼(개요, 인증, API 항목)이 있어야 한다
+  const tabCount = await page.evaluate(() => document.querySelectorAll(".preview-tab-btn").length);
+  expect(tabCount).toBeGreaterThanOrEqual(3);
+
+  // "API 항목" 탭 클릭 후 엔드포인트 행 수 검증
+  await page.evaluate(() => {
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".preview-tab-btn"));
+    const apiTab = tabs.find((t) => t.textContent?.trim() === "API 항목");
+    apiTab?.click();
+  });
+
+  if (fixture.expectedEndpoints === 0) {
+    const emptyText = await page.evaluate(() => {
+      const panels = Array.from(document.querySelectorAll(".preview-panel"));
+      const activePanel = panels.find((p) => p.classList.contains("active"));
+      return activePanel?.textContent ?? "";
+    });
+    expect(emptyText).toContain("정의된 API 항목이 없습니다");
+  } else {
+    const rowCount = await page.evaluate(() => {
+      const panels = Array.from(document.querySelectorAll(".preview-panel"));
+      const activePanel = panels.find((p) => p.classList.contains("active"));
+      return activePanel?.querySelectorAll("tbody tr").length ?? 0;
+    });
+    expect(rowCount).toBe(fixture.expectedEndpoints);
   }
 }

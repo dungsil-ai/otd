@@ -36,6 +36,168 @@
       .error {
         color: #b91c1c;
       }
+
+      /* ── 미리 보기 ── */
+      #preview {
+        margin-top: 32px;
+      }
+      .preview-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        border-bottom: 2px solid #4472c4;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+      .preview-tab-btn {
+        padding: 6px 14px;
+        border: 1px solid #d1d5db;
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+        background: #f9fafb;
+        cursor: pointer;
+        font-size: 13px;
+        color: #374151;
+        margin-bottom: -2px;
+      }
+      .preview-tab-btn.active {
+        background: #fff;
+        border-color: #4472c4;
+        border-bottom-color: #fff;
+        font-weight: bold;
+        color: #4472c4;
+      }
+      .preview-panels {
+        border: 1px solid #4472c4;
+        border-top: none;
+        padding: 16px;
+        background: #fff;
+      }
+      .preview-panel {
+        display: none;
+      }
+      .preview-panel.active {
+        display: block;
+      }
+
+      /* ── 테이블 ── */
+      .preview-table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      .preview-table th,
+      .preview-table td {
+        border: 1px solid #d1d5db;
+        padding: 5px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .preview-table thead th {
+        background: #d9e2f3;
+        font-weight: bold;
+        text-align: center;
+      }
+      .preview-table tbody th {
+        background: #f2f5fb;
+        font-weight: bold;
+        white-space: nowrap;
+      }
+      .preview-table td.center {
+        text-align: center;
+      }
+
+      /* ── 엔드포인트 블록 ── */
+      .endpoint-block {
+        border: 2px solid #4472c4;
+        border-radius: 4px;
+        margin-bottom: 24px;
+        overflow: hidden;
+      }
+      .endpoint-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #eef2fb;
+        border-bottom: 1px solid #4472c4;
+      }
+      .endpoint-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 14px;
+        font-weight: bold;
+      }
+      .endpoint-meta {
+        margin: 8px 12px;
+        width: calc(100% - 24px);
+      }
+
+      /* ── 섹션/서브섹션 헤더 ── */
+      .section-title {
+        background: #4472c4;
+        color: #fff;
+        font-weight: bold;
+        padding: 6px 12px;
+      }
+      .subsection-title {
+        background: #4472c4;
+        color: #fff;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 4px 12px;
+        margin: 8px 12px 0;
+      }
+      .endpoint-block .preview-table,
+      .endpoint-block .empty-note {
+        margin: 0 12px 8px;
+        width: calc(100% - 24px);
+      }
+      .empty-note {
+        font-style: italic;
+        color: #6b7280;
+        margin: 4px 12px;
+        font-size: 13px;
+      }
+
+      /* ── 샘플 ── */
+      .sample-title {
+        background: #d9e2f3;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 3px 12px;
+        margin: 8px 12px 0;
+      }
+      .sample-code {
+        background: #f8f9fa;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        font-size: 12px;
+        padding: 8px 10px;
+        margin: 0 12px 8px;
+        overflow-x: auto;
+        white-space: pre;
+      }
+
+      /* ── HTTP 메서드 배지 ── */
+      .method-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        color: #fff;
+        white-space: nowrap;
+        min-width: 52px;
+        text-align: center;
+      }
+      .method-get     { background: #28a745; }
+      .method-post    { background: #007bff; }
+      .method-put     { background: #ffc107; color: #1f2937; }
+      .method-delete  { background: #dc3545; }
+      .method-patch   { background: #6f42c1; }
+      .method-head    { background: #6c757d; }
+      .method-options { background: #6c757d; }
     </style>
   </head>
   <body>
@@ -49,6 +211,8 @@
 
     <textarea id="sourceText" aria-label="OpenAPI 문서 내용" placeholder="OpenAPI YAML/JSON 내용을 붙여넣으세요."></textarea>
     <p id="status"></p>
+
+    <div id="preview" hidden></div>
 
     <script type="module" src="./openapi-to-document.js"></script>
   </body>
