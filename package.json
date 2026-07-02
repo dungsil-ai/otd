@@ -32,6 +32,6 @@
     "@types/openapi-sampler": "^1.0.3",
     "openapi-types": "^12.1.3",
     "playwright": "^1.61.1",
-    "typescript": "^5.7.0"
+    "typescript": "^6.0.3"
   }
 }
