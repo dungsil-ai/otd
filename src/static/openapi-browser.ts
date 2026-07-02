@@ -4,15 +4,22 @@ import "./buffer-polyfill";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
+import type { XlsxData } from "../models/types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
 import { createWorkbook } from "../writer/xlsx-writer";
 import { renderPreview } from "./openapi-preview";
 
 type UiState = {
+  previewRequestId: number;
+  previewTimer: ReturnType<typeof setTimeout> | null;
   sourceName: string;
 };
 
+const PREVIEW_DEBOUNCE_MS = 300;
+
 const uiState: UiState = {
+  previewRequestId: 0,
+  previewTimer: null,
   sourceName: "openapi",
 };
 
@@ -31,6 +38,11 @@ sourceInput.addEventListener("change", async () => {
   uiState.sourceName = getFileNameWithoutExt(file.name);
   sourceText.value = await file.text();
   setStatus(`파일 로드 완료: ${file.name}`);
+  await updatePreview();
+});
+
+sourceText.addEventListener("input", () => {
+  schedulePreviewUpdate();
 });
 
 convertButton.addEventListener("click", async () => {
@@ -40,13 +52,12 @@ convertButton.addEventListener("click", async () => {
       throw new Error("OpenAPI 문서 내용을 입력하세요.");
     }
 
+    clearPreviewTimer();
     resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
-    const document = await parseOpenApiFromText(raw);
-    const validated = validateOpenApiDocument(document);
+    const xlsxData = await buildXlsxDataFromText(raw);
 
-    setStatus("엔드포인트 추출 및 미리 보기 생성 중...");
-    const xlsxData = extractEndpoints(validated);
+    setStatus("미리 보기 생성 중...");
     renderPreview(xlsxData, previewContainer);
 
     setStatus("엑셀 파일 생성 중...");
@@ -61,6 +72,52 @@ convertButton.addEventListener("click", async () => {
     setStatus(`오류: ${message}`, true);
   }
 });
+
+async function updatePreview(): Promise<void> {
+  const requestId = ++uiState.previewRequestId;
+  const raw = sourceText.value.trim();
+
+  if (!raw) {
+    resetPreview();
+    setStatus("");
+    return;
+  }
+
+  try {
+    setStatus("미리 보기 업데이트 중...");
+    const xlsxData = await buildXlsxDataFromText(raw);
+    if (requestId !== uiState.previewRequestId) return;
+
+    renderPreview(xlsxData, previewContainer);
+    setStatus(`미리 보기 업데이트 완료: ${xlsxData.endpoints.length}개 API 항목`);
+  } catch (error) {
+    if (requestId !== uiState.previewRequestId) return;
+
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`미리 보기 오류: ${message}`, true);
+  }
+}
+
+function schedulePreviewUpdate(): void {
+  clearPreviewTimer();
+  uiState.previewTimer = setTimeout(() => {
+    void updatePreview();
+  }, PREVIEW_DEBOUNCE_MS);
+}
+
+function clearPreviewTimer(): void {
+  if (uiState.previewTimer === null) return;
+
+  clearTimeout(uiState.previewTimer);
+  uiState.previewTimer = null;
+}
+
+async function buildXlsxDataFromText(raw: string): Promise<XlsxData> {
+  const document = await parseOpenApiFromText(raw);
+  const validated = validateOpenApiDocument(document);
+  return extractEndpoints(validated);
+}
 
 async function parseOpenApiFromText(raw: string): Promise<OpenAPI.Document> {
   const parsed = jsYaml.load(raw) as OpenAPI.Document;

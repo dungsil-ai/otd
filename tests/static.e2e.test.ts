@@ -4,7 +4,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 import ExcelJS from "exceljs";
@@ -78,12 +78,8 @@ describe("Static HTML Converter E2E", () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    // dist 디렉토리가 없거나 필수 파일이 없으면 빌드
-    const distIndexHtml = join(process.cwd(), "dist", "index.html");
-    const distJs = join(process.cwd(), "dist", "openapi-to-document.js");
-    if (!existsSync(distIndexHtml) || !existsSync(distJs)) {
-      await $`bun run build`.quiet();
-    }
+    // 정적 파일 변경사항이 E2E 테스트에 항상 반영되도록 먼저 빌드
+    await $`bun run build`.quiet();
 
     // dist 디렉토리를 정적으로 서빙하는 로컬 HTTP 서버 시작
     server = Bun.serve({
@@ -190,7 +186,89 @@ describe("Static HTML Converter E2E", () => {
       }, 120_000);
     }
   }
+
+  it("입력 내용 변경만으로 미리 보기를 즉시 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+
+      await page.fill("#sourceText", buildInlineOpenApi("첫 번째 API", "/first"));
+      await page.waitForFunction(() => document.getElementById("preview")?.hidden === false, {
+        timeout: 30_000,
+      });
+      await expectPreviewPath(page, "/first");
+
+      await page.fill("#sourceText", buildInlineOpenApi("두 번째 API", "/second"));
+      await expectPreviewPath(page, "/second");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("파일 업로드 후 미리 보기와 개행 렌더링을 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+
+      await page.setInputFiles("#sourceFile", {
+        name: "inline.yaml",
+        mimeType: "application/yaml",
+        buffer: Buffer.from(buildInlineOpenApi("첫 줄\n둘째 줄", "/uploaded")),
+      });
+
+      await expectPreviewPath(page, "/uploaded");
+      const overviewDescriptionStyle = await page.evaluate(() => {
+        const preview = document.getElementById("preview");
+        const cell = preview?.querySelector(".preview-table tbody tr:nth-child(4) td");
+        if (!(cell instanceof HTMLElement)) return null;
+        return {
+          text: cell.textContent,
+          whiteSpace: getComputedStyle(cell).whiteSpace,
+        };
+      });
+
+      expect(overviewDescriptionStyle?.text).toBe("첫 줄\n둘째 줄");
+      expect(overviewDescriptionStyle?.whiteSpace).toContain("pre");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
 });
+
+function buildInlineOpenApi(description: string, path: string): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Inline API",
+      version: "1.0.0",
+      description,
+    },
+    paths: {
+      [path]: {
+        get: {
+          summary: "상태 조회",
+          responses: {
+            "200": {
+              description: "성공",
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+async function expectPreviewPath(page: import("playwright").Page, path: string): Promise<void> {
+  await page.waitForFunction(
+    (expectedPath) => document.getElementById("preview")?.textContent?.includes(expectedPath),
+    path,
+    { timeout: 30_000 }
+  );
+}
 
 async function verifyXlsx(
   filePath: string,
