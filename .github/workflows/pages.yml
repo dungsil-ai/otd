@@ -3,6 +3,14 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore: 
+      - ".github/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".editorconfig"
+      - ".gitignore"
+      - "*.md"
+      - "*.json"
   workflow_dispatch:
 
 permissions:
