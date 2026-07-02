@@ -20,6 +20,7 @@ const sourceInput = getElement<HTMLInputElement>("sourceFile");
 const sourceText = getElement<HTMLTextAreaElement>("sourceText");
 const convertButton = getElement<HTMLButtonElement>("convertBtn");
 const statusText = getElement<HTMLParagraphElement>("status");
+const previewContainer = getElement<HTMLDivElement>("preview");
 
 sourceInput.addEventListener("change", async () => {
   const file = sourceInput.files?.[0];
@@ -39,20 +40,24 @@ convertButton.addEventListener("click", async () => {
       throw new Error("OpenAPI 문서 내용을 입력하세요.");
     }
 
+    resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
     const document = await parseOpenApiFromText(raw);
     const validated = validateOpenApiDocument(document);
 
-    setStatus("엔드포인트 추출 및 엑셀 생성 중...");
+    setStatus("엔드포인트 추출 및 미리 보기 생성 중...");
     const xlsxData = extractEndpoints(validated);
+    renderPreview(xlsxData, previewContainer);
+
+    setStatus("엑셀 파일 생성 중...");
     const workbook = createWorkbook(xlsxData);
     const buffer = await workbook.xlsx.writeBuffer();
 
     downloadXlsx(buffer, `${uiState.sourceName || "openapi"}.xlsx`);
-    renderPreview(xlsxData, getElement<HTMLDivElement>("preview"));
     setStatus(`변환 완료: ${xlsxData.endpoints.length}개 API 항목`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
     setStatus(`오류: ${message}`, true);
   }
 });
@@ -85,6 +90,11 @@ function downloadXlsx(data: unknown, fileName: string): void {
   link.download = fileName;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function resetPreview(): void {
+  previewContainer.hidden = true;
+  previewContainer.innerHTML = "";
 }
 
 function setStatus(message: string, isError = false): void {
