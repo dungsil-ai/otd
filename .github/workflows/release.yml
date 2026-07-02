@@ -101,6 +101,8 @@ jobs:
           generate_release_notes: true
           files: |
             dist/index.js
+            dist/index.html
+            dist/openapi-to-document.js
             dist/exe/otd-linux-x64
             dist/exe/otd-linux-arm64
             dist/exe/otd-darwin-x64
