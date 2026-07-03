@@ -224,6 +224,35 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("content 쿼리 스트링의 추가 서버 설명 HTML을 실행 가능한 마크업으로 렌더링하지 않아야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      const content = buildInlineOpenApiWithServers(
+        '<img src=x onerror="window.__otdXss=1">',
+        "/safe-server-description"
+      );
+      await page.goto(`${baseUrl}/?content=${encodeURIComponent(content)}`);
+      await expectPreviewPath(page, "/safe-server-description");
+
+      const result = await page.evaluate(() => {
+        const preview = document.getElementById("preview");
+        return {
+          executed: (window as Window & { __otdXss?: number }).__otdXss === 1,
+          imageCount: preview?.querySelectorAll("img").length ?? 0,
+          text: preview?.textContent ?? "",
+        };
+      });
+
+      expect(result.executed).toBe(false);
+      expect(result.imageCount).toBe(0);
+      expect(result.text).toContain('<img src=x onerror="window.__otdXss=1">');
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("url 쿼리 스트링으로 URL 입력값을 프리셋하고 문서를 불러와야 한다", async () => {
     const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
@@ -335,6 +364,33 @@ function buildInlineOpenApi(description: string, path: string): string {
       version: "1.0.0",
       description,
     },
+    paths: {
+      [path]: {
+        get: {
+          summary: "상태 조회",
+          responses: {
+            "200": {
+              description: "성공",
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function buildInlineOpenApiWithServers(serverDescription: string, path: string): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Inline Server API",
+      version: "1.0.0",
+    },
+    servers: [
+      { url: "https://dev.example.com", description: "개발" },
+      { url: "https://prod.example.com", description: "운영" },
+      { url: "https://extra.example.com", description: serverDescription },
+    ],
     paths: {
       [path]: {
         get: {
