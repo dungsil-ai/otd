@@ -137,7 +137,7 @@ function buildAuthSchemeBlock(scheme: SecuritySchemeInfo): string {
   if (scheme.description) details.push(["설명", scheme.description]);
 
   const rowsHtml = details
-    .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
+    .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
     .join("");
 
   return `<div class="endpoint-block"><div class="section-title">${escapeHtml(scheme.name)}</div><table class="preview-table"><tbody>${rowsHtml}</tbody></table></div>`;
@@ -188,7 +188,9 @@ function buildEndpointBlock(endpoint: EndpointInfo, data: XlsxData): string {
 
   if (metaRows.length > 0) {
     const metaRowsHtml = metaRows
-      .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
+      .map(
+        ([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
+      )
       .join("");
     parts.push(`<table class="preview-table endpoint-meta"><tbody>${metaRowsHtml}</tbody></table>`);
   }
@@ -299,7 +301,9 @@ function buildResponseSectionHtml(response: ResponseInfo): string {
   let metaHtml = "";
   if (metaRows.length > 0) {
     const rowsHtml = metaRows
-      .map(([label, value]) => `<tr><th>${label}</th><td>${escapeHtml(value)}</td></tr>`)
+      .map(
+        ([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
+      )
       .join("");
     metaHtml = `<table class="preview-table"><tbody>${rowsHtml}</tbody></table>`;
   }
