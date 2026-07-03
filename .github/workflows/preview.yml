@@ -74,14 +74,7 @@ jobs:
     if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    outputs:
-      page-url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
 
     steps:
       - name: Download Pages preview artifact
@@ -90,17 +83,40 @@ jobs:
           name: pages-preview
           path: pages-preview/
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Deploy Pages preview to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_DIR: preview/pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages-preview/
+          git init gh-pages-worktree
+          cd gh-pages-worktree
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: Deploy Pages preview with GitHub Actions
-        id: deployment
-        uses: actions/deploy-pages@v4
+          if git fetch --depth=1 origin gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p "$PREVIEW_DIR"
+          rm -rf "$PREVIEW_DIR"
+          mkdir -p "$PREVIEW_DIR"
+          cp -R ../pages-preview/. "$PREVIEW_DIR/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A "$PREVIEW_DIR"
+
+          if git diff --cached --quiet; then
+            echo "배포할 미리보기 변경사항이 없습니다: $PREVIEW_DIR"
+            exit 0
+          fi
+
+          git commit -m "PR #${{ github.event.pull_request.number }} 미리보기 페이지 배포"
+          git push origin HEAD:gh-pages
 
   comment-preview:
     needs: [build-preview, deploy-preview]
@@ -115,19 +131,21 @@ jobs:
         uses: actions/github-script@v7
         env:
           ARTIFACT_ID: ${{ needs.build-preview.outputs.excel-artifact-id }}
-          PAGE_URL: ${{ needs.deploy-preview.outputs.page-url }}
+          PAGES_BASE_URL: ${{ vars.PAGES_BASE_URL }}
         with:
           script: |
             const artifactId = process.env.ARTIFACT_ID;
             const downloadUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/artifacts/${artifactId}`;
-            const previewUrl = process.env.PAGE_URL;
+            const configuredBaseUrl = process.env.PAGES_BASE_URL?.trim().replace(/\/+$/, '');
+            const fallbackBaseUrl = `https://${context.repo.owner}.github.io/${context.repo.repo}`;
+            const previewUrl = `${configuredBaseUrl || fallbackBaseUrl}/preview/pr-${context.issue.number}/`;
             const body = [
               '📊 **PR 미리보기가 생성되었습니다**',
               '',
               `[🌐 정적 변환기 미리보기](${previewUrl})`,
               `[📥 complete-preview.xlsx 다운로드](${downloadUrl})`,
               '',
-              `> 정적 페이지는 GitHub Actions Pages 배포로 생성됨 (Run: ${context.runId})`,
+              `> 정적 페이지는 \`gh-pages\` 브랜치의 \`preview/pr-${context.issue.number}\` 경로에 배포됩니다.`,
               `> Excel 파일은 \`tests/fixtures/complete.yaml\` 기반으로 생성됨 (Run: ${context.runId})`
             ].join('\n');
 
@@ -155,3 +173,45 @@ jobs:
                 body,
               });
             }
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Remove Pages preview
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_DIR: preview/pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          git init gh-pages-worktree
+          cd gh-pages-worktree
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if ! git fetch --depth=1 origin gh-pages; then
+            echo "gh-pages 브랜치가 없어 정리할 미리보기 디렉터리가 없습니다."
+            exit 0
+          fi
+
+          git checkout gh-pages
+          if [ ! -d "$PREVIEW_DIR" ]; then
+            echo "삭제할 미리보기 디렉터리가 없습니다: $PREVIEW_DIR"
+            exit 0
+          fi
+
+          rm -rf "$PREVIEW_DIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A "$PREVIEW_DIR"
+
+          if git diff --cached --quiet; then
+            echo "정리할 미리보기 변경사항이 없습니다: $PREVIEW_DIR"
+            exit 0
+          fi
+
+          git commit -m "PR #${{ github.event.pull_request.number }} 미리보기 페이지 정리"
+          git push origin HEAD:gh-pages
