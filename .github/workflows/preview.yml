@@ -101,7 +101,6 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
           fi
 
-          mkdir -p "$PREVIEW_DIR"
           rm -rf "$PREVIEW_DIR"
           mkdir -p "$PREVIEW_DIR"
           cp -R ../pages-preview/. "$PREVIEW_DIR/"
