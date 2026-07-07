@@ -249,6 +249,54 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("Clipboard API가 실패하면 선택 복사 방식으로 구글 시트 TSV를 복사해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async () => {
+              throw new Error("권한 거부");
+            },
+          },
+        });
+        window.open = (url?: string | URL) => {
+          (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl = String(url);
+          return null;
+        };
+        document.execCommand = (commandId: string) => {
+          if (commandId !== "copy") return false;
+          const selectedText = window.getSelection()?.toString();
+          (window as Window & { __fallbackCopiedSheetsText?: string }).__fallbackCopiedSheetsText =
+            selectedText;
+          return true;
+        };
+      });
+      await page.reload();
+
+      await page.fill("#sourceText", buildInlineOpenApi("대체 복사", "/fallback-sheets"));
+      await expectPreviewPath(page, "/fallback-sheets");
+      await page.click("#googleSheetsBtn");
+
+      const result = await page.evaluate(() => ({
+        copiedText: (window as Window & { __fallbackCopiedSheetsText?: string })
+          .__fallbackCopiedSheetsText,
+        openedUrl: (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl,
+        status: document.getElementById("status")?.textContent,
+      }));
+
+      expect(result.openedUrl).toBe("https://sheets.new");
+      expect(result.copiedText).toContain("GET\t/fallback-sheets\t상태 조회\t");
+      expect(result.status).toContain("팝업이 차단된 경우");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("content 쿼리 스트링으로 직접 입력 내용을 프리셋하고 미리 보기를 갱신해야 한다", async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
