@@ -208,21 +208,13 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
-  it("구글 시트 버튼은 API 항목 TSV를 클립보드에 복사하고 새 시트를 열어야 한다", async () => {
-    const context = await browser.newContext();
+  it("구글 시트용 XLSX 버튼은 전체 명세서 워크북을 다운로드하고 시트 홈을 열어야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
     const page = await context.newPage();
 
     try {
       await page.goto(baseUrl);
       await page.addInitScript(() => {
-        Object.defineProperty(navigator, "clipboard", {
-          configurable: true,
-          value: {
-            writeText: async (text: string) => {
-              (window as Window & { __copiedSheetsText?: string }).__copiedSheetsText = text;
-            },
-          },
-        });
         window.open = (url?: string | URL) => {
           (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl = String(url);
           return null;
@@ -232,66 +224,34 @@ describe("Static HTML Converter E2E", () => {
 
       expect(await page.locator("#googleSheetsBtn").isDisabled()).toBe(true);
 
-      await page.fill("#sourceText", buildInlineOpenApi("구글 시트 내보내기", "/sheets"));
+      await page.fill("#sourceText", buildInlineOpenApi("구글 시트용 전체 내보내기", "/sheets"));
       await expectPreviewPath(page, "/sheets");
-      await page.click("#googleSheetsBtn");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#googleSheetsBtn"),
+      ]);
 
       const result = await page.evaluate(() => ({
-        copiedText: (window as Window & { __copiedSheetsText?: string }).__copiedSheetsText,
-        openedUrl: (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl,
-      }));
-
-      expect(result.openedUrl).toBe("https://sheets.new");
-      expect(result.copiedText).toContain("메서드\t경로\t요약\t설명\t태그");
-      expect(result.copiedText).toContain("GET\t/sheets\t상태 조회\t");
-    } finally {
-      await context.close();
-    }
-  }, 60_000);
-
-  it("Clipboard API가 실패하면 선택 복사 방식으로 구글 시트 TSV를 복사해야 한다", async () => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    try {
-      await page.goto(baseUrl);
-      await page.addInitScript(() => {
-        Object.defineProperty(navigator, "clipboard", {
-          configurable: true,
-          value: {
-            writeText: async () => {
-              throw new Error("권한 거부");
-            },
-          },
-        });
-        window.open = (url?: string | URL) => {
-          (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl = String(url);
-          return null;
-        };
-        document.execCommand = (commandId: string) => {
-          if (commandId !== "copy") return false;
-          const selectedText = window.getSelection()?.toString();
-          (window as Window & { __fallbackCopiedSheetsText?: string }).__fallbackCopiedSheetsText =
-            selectedText;
-          return true;
-        };
-      });
-      await page.reload();
-
-      await page.fill("#sourceText", buildInlineOpenApi("대체 복사", "/fallback-sheets"));
-      await expectPreviewPath(page, "/fallback-sheets");
-      await page.click("#googleSheetsBtn");
-
-      const result = await page.evaluate(() => ({
-        copiedText: (window as Window & { __fallbackCopiedSheetsText?: string })
-          .__fallbackCopiedSheetsText,
         openedUrl: (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl,
         status: document.getElementById("status")?.textContent,
       }));
 
-      expect(result.openedUrl).toBe("https://sheets.new");
-      expect(result.copiedText).toContain("GET\t/fallback-sheets\t상태 조회\t");
-      expect(result.status).toContain("팝업이 차단된 경우");
+      expect(download.suggestedFilename()).toBe("openapi-google-sheets.xlsx");
+      expect(result.openedUrl).toBe("https://docs.google.com/spreadsheets/u/0/");
+      expect(result.status).toContain("전체 XLSX 명세서를 다운로드했습니다");
+
+      const downloadPath = await download.path();
+      expect(downloadPath).not.toBeNull();
+      if (downloadPath !== null) {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(downloadPath);
+        const sheetNames = workbook.worksheets.map((ws) => ws.name);
+        expect(sheetNames).toContain("개요");
+        expect(sheetNames).toContain("인증");
+        expect(sheetNames).toContain("API 항목");
+        expect(workbook.getWorksheet("API 항목")?.getCell("C3").value).toBe("/sheets");
+      }
     } finally {
       await context.close();
     }

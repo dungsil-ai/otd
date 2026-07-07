@@ -244,77 +244,13 @@ async function openInGoogleSheets(): Promise<void> {
     return;
   }
 
-  const tsv = buildGoogleSheetsTsv(data);
-  const openedWindow = window.open("https://sheets.new", "_blank", "noopener,noreferrer");
-
-  try {
-    await copyTextToClipboard(tsv);
-    if (openedWindow === null) {
-      setStatus(
-        "API 항목 표를 복사했습니다. 팝업이 차단된 경우 https://sheets.new를 직접 열고 A1 셀에 붙여넣으세요."
-      );
-      return;
-    }
-
-    setStatus("구글 시트 새 문서를 열었습니다. A1 셀에 붙여넣으면 API 항목 표가 입력됩니다.");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const prefix =
-      openedWindow === null ? "구글 시트 내보내기 오류" : "구글 시트 새 문서는 열었지만 복사 오류";
-    setStatus(`${prefix}: ${message}`, true);
-  }
-}
-
-async function copyTextToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // 브라우저 권한 정책에 따라 Clipboard API가 실패할 수 있어 아래 대체 경로를 사용합니다.
-    }
-  }
-
-  copyTextWithSelection(text);
-}
-
-function copyTextWithSelection(text: string): void {
-  const textArea = document.createElement("textarea");
-  textArea.value = text;
-  textArea.setAttribute("readonly", "");
-  textArea.style.position = "fixed";
-  textArea.style.inset = "0 auto auto 0";
-  textArea.style.opacity = "0";
-
-  document.body.appendChild(textArea);
-  textArea.select();
-
-  try {
-    if (!document.execCommand("copy")) {
-      throw new Error("클립보드 복사 명령을 실행할 수 없습니다.");
-    }
-  } finally {
-    textArea.remove();
-  }
-}
-
-function buildGoogleSheetsTsv(data: XlsxData): string {
-  const rows = [
-    ["메서드", "경로", "요약", "설명", "태그"],
-    ...data.endpoints.map((endpoint) => [
-      endpoint.method,
-      endpoint.path,
-      endpoint.summary,
-      endpoint.description,
-      endpoint.tags.join(", "),
-    ]),
-  ];
-
-  return rows.map((row) => row.map(formatTsvCell).join("\t")).join("\n");
-}
-
-function formatTsvCell(value: string): string {
-  return value.replace(/\r?\n/g, " ").replace(/\t/g, " ");
+  const workbook = createWorkbook(data);
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadXlsx(buffer, `${uiState.sourceName || "openapi"}-google-sheets.xlsx`);
+  window.open("https://docs.google.com/spreadsheets/u/0/", "_blank", "noopener,noreferrer");
+  setStatus(
+    "전체 XLSX 명세서를 다운로드했습니다. 구글 시트에서 파일 > 가져오기 > 업로드로 불러오세요."
+  );
 }
 
 function downloadXlsx(data: unknown, fileName: string): void {
