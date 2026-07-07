@@ -18,6 +18,7 @@ type ReleaseActionStep = {
 const workflowFiles = [
   ".github/workflows/ci.yml",
   ".github/workflows/nightly-release.yml",
+  ".github/workflows/pages.yml",
   ".github/workflows/preview.yml",
   ".github/workflows/release.yml",
 ];
@@ -209,6 +210,20 @@ describe("GitHub Actions workflows", () => {
         "dist/openapi-to-document.js"
       );
     }
+  });
+
+  it("pages workflow should deploy static site to the gh-pages branch", () => {
+    const content = readFileSync(join(process.cwd(), ".github/workflows/pages.yml"), "utf8");
+
+    expect(content).toContain("uses: actions/upload-artifact@v4");
+    expect(content).toContain("uses: actions/download-artifact@v4");
+    expect(content).toContain("Deploy Pages to gh-pages");
+    expect(content).toContain("contents: write");
+    expect(content).toContain("git fetch --depth=1 origin gh-pages");
+    expect(content).toContain("git push origin HEAD:gh-pages");
+    expect(content).toContain("! -name preview ! -name CNAME");
+    expect(content).not.toContain("actions/deploy-pages");
+    expect(content).not.toContain("actions/upload-pages-artifact");
   });
 
   it("nightly release should skip tag creation when the latest nightly tag targets HEAD", () => {

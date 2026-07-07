@@ -48,25 +48,55 @@ jobs:
           cp dist/index.html pages/index.html
           cp dist/openapi-to-document.js pages/openapi-to-document.js
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: pages
           path: pages/
+          if-no-files-found: error
 
   deploy-pages:
     needs: build-pages
     runs-on: ubuntu-latest
     permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      contents: write
 
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Download Pages artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pages
+          path: pages/
+
+      - name: Deploy Pages to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git init gh-pages-worktree
+          cd gh-pages-worktree
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git fetch --depth=1 origin gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name preview ! -name CNAME -exec rm -rf {} +
+          cp -R ../pages/. .
+          touch .nojekyll
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "배포할 Pages 변경사항이 없습니다."
+            exit 0
+          fi
+
+          git commit -m "GitHub Pages 배포"
+          git push origin HEAD:gh-pages
