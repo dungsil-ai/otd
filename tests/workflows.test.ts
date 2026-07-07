@@ -210,4 +210,17 @@ describe("GitHub Actions workflows", () => {
       );
     }
   });
+
+  it("nightly release should skip tag creation when the latest nightly tag targets HEAD", () => {
+    const content = readFileSync(
+      join(process.cwd(), ".github/workflows/nightly-release.yml"),
+      "utf8"
+    );
+
+    expect(content).toContain("id: nightly-change-check");
+    expect(content).toContain("fetch-depth: 0");
+    expect(content).toContain("git rev-list -n 1");
+    expect(content).toContain("should_release=false");
+    expect(content).toContain("if: needs.changes.outputs.should_release == 'true'");
+  });
 });

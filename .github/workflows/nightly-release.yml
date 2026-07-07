@@ -9,7 +9,43 @@ permissions:
   contents: write
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.nightly-change-check.outputs.should_release }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check for nightly changes
+        id: nightly-change-check
+        run: |
+          LATEST_NIGHTLY_TAG=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' "refs/tags/nightly-*" | sed -n '1p')
+
+          if [ -z "$LATEST_NIGHTLY_TAG" ]; then
+            echo "No previous nightly tag found; creating nightly release."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LATEST_NIGHTLY_SHA=$(git rev-list -n 1 "$LATEST_NIGHTLY_TAG")
+          CURRENT_SHA=$(git rev-parse HEAD)
+
+          if [ "$LATEST_NIGHTLY_SHA" = "$CURRENT_SHA" ]; then
+            echo "No commits since $LATEST_NIGHTLY_TAG ($CURRENT_SHA); skipping nightly release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changes detected since $LATEST_NIGHTLY_TAG ($LATEST_NIGHTLY_SHA..$CURRENT_SHA); creating nightly release."
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
   nightly:
+    needs: changes
+    if: needs.changes.outputs.should_release == 'true'
     runs-on: ubuntu-latest
 
     steps:
