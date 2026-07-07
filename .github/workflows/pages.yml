@@ -3,31 +3,29 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-    paths-ignore: 
-      - ".github/**"
-      - "scripts/**"
-      - "tests/**"
-      - ".editorconfig"
-      - ".gitignore"
-      - "*.md"
-      - "*.json"
+    paths:
+      - '.github/workflows/pages.yml'
+      - 'src/writer/**'
+      - 'src/transformer/**'
+      - 'src/models/**'
+      - 'src/static/**'
+      - 'scripts/build.mjs'
+      - 'package.json'
+      - 'bun.lock'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build-pages:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -41,10 +39,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build
+      - name: Build static Pages site
         run: bun run build
 
-      - name: Prepare pages artifact
+      - name: Prepare Pages artifact
         run: |
           mkdir -p pages
           cp dist/index.html pages/index.html
@@ -53,11 +51,22 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages/
 
+  deploy-pages:
+    needs: build-pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
