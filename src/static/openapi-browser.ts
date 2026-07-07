@@ -13,6 +13,7 @@ type UiState = {
   previewRequestId: number;
   previewTimer: ReturnType<typeof setTimeout> | null;
   sourceName: string;
+  latestData: XlsxData | null;
 };
 
 const PREVIEW_DEBOUNCE_MS = 300;
@@ -21,6 +22,7 @@ const uiState: UiState = {
   previewRequestId: 0,
   previewTimer: null,
   sourceName: "openapi",
+  latestData: null,
 };
 
 const sourceInput = getElement<HTMLInputElement>("sourceFile");
@@ -28,6 +30,7 @@ const sourceText = getElement<HTMLTextAreaElement>("sourceText");
 const sourceUrlInput = getElement<HTMLInputElement>("sourceUrl");
 const loadUrlButton = getElement<HTMLButtonElement>("loadUrlBtn");
 const convertButton = getElement<HTMLButtonElement>("convertBtn");
+const googleSheetsButton = getElement<HTMLButtonElement>("googleSheetsBtn");
 const statusText = getElement<HTMLParagraphElement>("status");
 const previewContainer = getElement<HTMLDivElement>("preview");
 
@@ -67,6 +70,10 @@ loadUrlButton.addEventListener("click", () => {
   void loadFromUrl();
 });
 
+googleSheetsButton.addEventListener("click", () => {
+  void openInGoogleSheets();
+});
+
 void initializeFromQueryParams();
 
 convertButton.addEventListener("click", async () => {
@@ -82,6 +89,7 @@ convertButton.addEventListener("click", async () => {
     const xlsxData = await buildXlsxDataFromText(raw);
 
     setStatus("미리 보기 생성 중...");
+    setLatestData(xlsxData);
     renderPreview(xlsxData, previewContainer);
 
     setStatus("엑셀 파일 생성 중...");
@@ -174,6 +182,7 @@ async function updatePreview(): Promise<void> {
     const xlsxData = await buildXlsxDataFromText(raw);
     if (requestId !== uiState.previewRequestId) return;
 
+    setLatestData(xlsxData);
     renderPreview(xlsxData, previewContainer);
     setStatus(`미리 보기 업데이트 완료: ${xlsxData.endpoints.length}개 API 항목`);
   } catch (error) {
@@ -228,6 +237,43 @@ function validateOpenApiDocument(api: OpenAPI.Document): OpenAPIV3.Document {
   return api as OpenAPIV3.Document;
 }
 
+async function openInGoogleSheets(): Promise<void> {
+  const data = uiState.latestData;
+  if (data === null) {
+    setStatus("먼저 OpenAPI 문서의 미리 보기를 생성하세요.", true);
+    return;
+  }
+
+  const tsv = buildGoogleSheetsTsv(data);
+  try {
+    await navigator.clipboard.writeText(tsv);
+    window.open("https://sheets.new", "_blank", "noopener,noreferrer");
+    setStatus("구글 시트 새 문서를 열었습니다. A1 셀에 붙여넣으면 API 항목 표가 입력됩니다.");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`구글 시트 내보내기 오류: ${message}`, true);
+  }
+}
+
+function buildGoogleSheetsTsv(data: XlsxData): string {
+  const rows = [
+    ["메서드", "경로", "요약", "설명", "태그"],
+    ...data.endpoints.map((endpoint) => [
+      endpoint.method,
+      endpoint.path,
+      endpoint.summary,
+      endpoint.description,
+      endpoint.tags.join(", "),
+    ]),
+  ];
+
+  return rows.map((row) => row.map(formatTsvCell).join("\t")).join("\n");
+}
+
+function formatTsvCell(value: string): string {
+  return value.replace(/\r?\n/g, " ").replace(/\t/g, " ");
+}
+
 function downloadXlsx(data: unknown, fileName: string): void {
   const blob = new Blob([data as BlobPart], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -244,6 +290,12 @@ function downloadXlsx(data: unknown, fileName: string): void {
 function resetPreview(): void {
   previewContainer.hidden = true;
   previewContainer.innerHTML = "";
+  setLatestData(null);
+}
+
+function setLatestData(data: XlsxData | null): void {
+  uiState.latestData = data;
+  googleSheetsButton.disabled = data === null;
 }
 
 function setStatus(message: string, isError = false): void {

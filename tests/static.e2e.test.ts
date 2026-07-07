@@ -208,6 +208,47 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("구글 시트 버튼은 API 항목 TSV를 클립보드에 복사하고 새 시트를 열어야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: {
+            writeText: async (text: string) => {
+              (window as Window & { __copiedSheetsText?: string }).__copiedSheetsText = text;
+            },
+          },
+        });
+        window.open = (url?: string | URL) => {
+          (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl = String(url);
+          return null;
+        };
+      });
+      await page.reload();
+
+      expect(await page.locator("#googleSheetsBtn").isDisabled()).toBe(true);
+
+      await page.fill("#sourceText", buildInlineOpenApi("구글 시트 내보내기", "/sheets"));
+      await expectPreviewPath(page, "/sheets");
+      await page.click("#googleSheetsBtn");
+
+      const result = await page.evaluate(() => ({
+        copiedText: (window as Window & { __copiedSheetsText?: string }).__copiedSheetsText,
+        openedUrl: (window as Window & { __openedSheetsUrl?: string }).__openedSheetsUrl,
+      }));
+
+      expect(result.openedUrl).toBe("https://sheets.new");
+      expect(result.copiedText).toContain("메서드\t경로\t요약\t설명\t태그");
+      expect(result.copiedText).toContain("GET\t/sheets\t상태 조회\t");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("content 쿼리 스트링으로 직접 입력 내용을 프리셋하고 미리 보기를 갱신해야 한다", async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
