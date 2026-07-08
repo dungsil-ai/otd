@@ -18,6 +18,7 @@ type Fixture =
       shouldError: false;
       expectedTitle: string;
       expectedFirstEndpoint: { method: string; path: string } | null;
+      expectedAuthSheet: boolean;
     }
   | {
       name: string;
@@ -33,6 +34,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Minimal API",
     expectedFirstEndpoint: { method: "GET", path: "/health" },
+    expectedAuthSheet: false,
   },
   {
     name: "complete.yaml",
@@ -40,6 +42,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Complete API",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   {
     name: "edge-cases.yaml",
@@ -47,6 +50,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Edge Cases API",
     expectedFirstEndpoint: { method: "GET", path: "/" },
+    expectedAuthSheet: true,
   },
   {
     name: "empty-paths.yaml",
@@ -54,6 +58,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Empty Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "no-paths.yaml",
@@ -61,6 +66,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "No Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "large-100-endpoints.yaml",
@@ -68,6 +74,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Large API (100 Endpoints)",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   { name: "swagger-v2.yaml", expectedEndpoints: null, shouldError: true, expectedError: "v2" },
 ];
@@ -488,7 +495,11 @@ async function verifyXlsx(
   // 필수 시트 존재 확인
   const sheetNames = workbook.worksheets.map((ws) => ws.name);
   expect(sheetNames).toContain("개요");
-  expect(sheetNames).toContain("인증");
+  if (fixture.expectedAuthSheet) {
+    expect(sheetNames).toContain("인증");
+  } else {
+    expect(sheetNames).not.toContain("인증");
+  }
   expect(sheetNames).toContain("API 항목");
 
   // 개요 시트: API 제목 확인 (B2="속성"/C2="값" 헤더, B3="제목"/C3=title 데이터)
@@ -536,9 +547,18 @@ async function verifyPreview(
   });
   expect(isPreviewVisible).toBe(true);
 
-  // 최소 3개의 탭 버튼(개요, 인증, API 항목)이 있어야 한다
-  const tabCount = await page.evaluate(() => document.querySelectorAll(".preview-tab-btn").length);
-  expect(tabCount).toBeGreaterThanOrEqual(3);
+  const tabLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+      (tab) => tab.textContent?.trim() ?? ""
+    )
+  );
+  expect(tabLabels).toContain("개요");
+  expect(tabLabels).toContain("API 항목");
+  if (fixture.expectedAuthSheet) {
+    expect(tabLabels).toContain("인증");
+  } else {
+    expect(tabLabels).not.toContain("인증");
+  }
 
   // "API 항목" 탭 클릭 후 엔드포인트 행 수 검증
   await page.evaluate(() => {
