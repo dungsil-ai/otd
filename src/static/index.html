@@ -142,13 +142,18 @@
       }
       .preview-tabs {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 4px;
         border-bottom: 2px solid #4472c4;
         margin-bottom: 0;
         padding-bottom: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-gutter: stable;
+        -webkit-overflow-scrolling: touch;
       }
       .preview-tab-btn {
+        flex: 0 0 auto;
         padding: 6px 14px;
         border: 1px solid #d1d5db;
         border-bottom: none;
