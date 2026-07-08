@@ -226,6 +226,24 @@ describe("GitHub Actions workflows", () => {
     expect(content).not.toContain("actions/upload-pages-artifact");
   });
 
+  it("release and nightly workflows should inject the build date automatically", () => {
+    const releaseWorkflowFiles = [
+      ".github/workflows/release.yml",
+      ".github/workflows/nightly-release.yml",
+    ];
+
+    for (const file of releaseWorkflowFiles) {
+      const content = readFileSync(join(process.cwd(), file), "utf8");
+
+      expect(content, `${file} should calculate the UTC build date`).toContain(
+        "OTD_BUILD_DATE=$(date -u +%F)"
+      );
+      expect(content, `${file} should export the build date to later build steps`).toContain(
+        'echo "OTD_BUILD_DATE=$OTD_BUILD_DATE"'
+      );
+    }
+  });
+
   it("nightly release should skip tag creation when the latest nightly tag targets HEAD", () => {
     const content = readFileSync(
       join(process.cwd(), ".github/workflows/nightly-release.yml"),
