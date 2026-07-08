@@ -18,6 +18,7 @@ type Fixture =
       shouldError: false;
       expectedTitle: string;
       expectedFirstEndpoint: { method: string; path: string } | null;
+      expectedAuthSheet: boolean;
     }
   | {
       name: string;
@@ -33,6 +34,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Minimal API",
     expectedFirstEndpoint: { method: "GET", path: "/health" },
+    expectedAuthSheet: false,
   },
   {
     name: "complete.yaml",
@@ -40,6 +42,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Complete API",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   {
     name: "edge-cases.yaml",
@@ -47,6 +50,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Edge Cases API",
     expectedFirstEndpoint: { method: "GET", path: "/" },
+    expectedAuthSheet: true,
   },
   {
     name: "empty-paths.yaml",
@@ -54,6 +58,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Empty Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "no-paths.yaml",
@@ -61,6 +66,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "No Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "large-100-endpoints.yaml",
@@ -68,6 +74,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Large API (100 Endpoints)",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   { name: "swagger-v2.yaml", expectedEndpoints: null, shouldError: true, expectedError: "v2" },
 ];
@@ -203,6 +210,40 @@ describe("Static HTML Converter E2E", () => {
 
       await page.fill("#sourceText", buildInlineOpenApi("두 번째 API", "/second"));
       await expectPreviewPath(page, "/second");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("미리 보기 탭이 많아지면 가로 스크롤을 사용해야 한다", async () => {
+    const context = await browser.newContext({ viewport: { width: 520, height: 720 } });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceText", buildTaggedOpenApi(12));
+      await expectPreviewPath(page, "/tag-1");
+
+      const tabLayout = await page.evaluate(() => {
+        const tabs = document.querySelector(".preview-tabs");
+        const firstButton = document.querySelector(".preview-tab-btn");
+        if (!(tabs instanceof HTMLElement) || !(firstButton instanceof HTMLElement)) return null;
+        const style = getComputedStyle(tabs);
+        const buttonStyle = getComputedStyle(firstButton);
+        return {
+          flexWrap: style.flexWrap,
+          overflowX: style.overflowX,
+          scrollWidth: tabs.scrollWidth,
+          clientWidth: tabs.clientWidth,
+          buttonFlexShrink: buttonStyle.flexShrink,
+        };
+      });
+
+      expect(tabLayout).not.toBeNull();
+      expect(tabLayout?.flexWrap).toBe("nowrap");
+      expect(tabLayout?.overflowX).toBe("auto");
+      expect(tabLayout?.scrollWidth).toBeGreaterThan(tabLayout?.clientWidth ?? 0);
+      expect(tabLayout?.buttonFlexShrink).toBe("0");
     } finally {
       await context.close();
     }
@@ -379,6 +420,36 @@ function buildInlineOpenApi(description: string, path: string): string {
   });
 }
 
+function buildTaggedOpenApi(tagCount: number): string {
+  const paths: Record<string, unknown> = {};
+  const tags = Array.from({ length: tagCount }, (_, index) => {
+    const tagNumber = index + 1;
+    const name = `tag-${tagNumber}`;
+    paths[`/${name}`] = {
+      get: {
+        tags: [name],
+        summary: `${name} 조회`,
+        responses: {
+          "200": {
+            description: "성공",
+          },
+        },
+      },
+    };
+    return { name, description: `매우 긴 ${name} 미리보기` };
+  });
+
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Many Tagged API",
+      version: "1.0.0",
+    },
+    tags,
+    paths,
+  });
+}
+
 function buildInlineOpenApiWithServers(serverDescription: string, path: string): string {
   return JSON.stringify({
     openapi: "3.0.0",
@@ -424,7 +495,11 @@ async function verifyXlsx(
   // 필수 시트 존재 확인
   const sheetNames = workbook.worksheets.map((ws) => ws.name);
   expect(sheetNames).toContain("개요");
-  expect(sheetNames).toContain("인증");
+  if (fixture.expectedAuthSheet) {
+    expect(sheetNames).toContain("인증");
+  } else {
+    expect(sheetNames).not.toContain("인증");
+  }
   expect(sheetNames).toContain("API 항목");
 
   // 개요 시트: API 제목 확인 (B2="속성"/C2="값" 헤더, B3="제목"/C3=title 데이터)
@@ -472,9 +547,18 @@ async function verifyPreview(
   });
   expect(isPreviewVisible).toBe(true);
 
-  // 최소 3개의 탭 버튼(개요, 인증, API 항목)이 있어야 한다
-  const tabCount = await page.evaluate(() => document.querySelectorAll(".preview-tab-btn").length);
-  expect(tabCount).toBeGreaterThanOrEqual(3);
+  const tabLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+      (tab) => tab.textContent?.trim() ?? ""
+    )
+  );
+  expect(tabLabels).toContain("개요");
+  expect(tabLabels).toContain("API 항목");
+  if (fixture.expectedAuthSheet) {
+    expect(tabLabels).toContain("인증");
+  } else {
+    expect(tabLabels).not.toContain("인증");
+  }
 
   // "API 항목" 탭 클릭 후 엔드포인트 행 수 검증
   await page.evaluate(() => {

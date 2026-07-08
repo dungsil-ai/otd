@@ -24,7 +24,9 @@ export function renderPreview(data: XlsxData, container: HTMLElement): void {
 
   const tabs: Array<{ label: string; content: string }> = [
     { label: "개요", content: buildOverviewContent(data) },
-    { label: "인증", content: buildAuthContent(data.securitySchemes) },
+    ...(data.securitySchemes.length > 0
+      ? [{ label: "인증", content: buildAuthContent(data.securitySchemes) }]
+      : []),
     { label: "API 항목", content: buildEndpointsContent(data.endpoints) },
     ...Array.from(tagGroups.entries()).map(([tag, endpoints]) => ({
       label: `${getTagDisplayName(tag, data)} API`,

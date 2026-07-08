@@ -9,7 +9,7 @@ import type { OpenAPIV3 } from "openapi-types";
 import type { CliOptions, XlsxData } from "../src/models/types";
 import { parseOpenApi } from "../src/parser/openapi-parser";
 import { extractEndpoints } from "../src/transformer/endpoint-extractor";
-import { writeXlsx } from "../src/writer/xlsx-writer";
+import { createWorkbook, writeXlsx } from "../src/writer/xlsx-writer";
 
 describe("XLSX Writer", () => {
   let xlsxData: XlsxData;
@@ -58,6 +58,19 @@ describe("XLSX Writer", () => {
       const file = Bun.file(testOutputPath);
       expect(await file.exists()).toBe(true);
       expect(file.size).toBeGreaterThan(0);
+    });
+
+    it("인증 스키마가 없으면 인증 시트를 생성하지 않아야 한다", () => {
+      const workbook = createWorkbook({
+        ...xlsxData,
+        securitySchemes: [],
+      });
+
+      const sheetNames = workbook.worksheets.map((worksheet) => worksheet.name);
+
+      expect(sheetNames).toContain("개요");
+      expect(sheetNames).not.toContain("인증");
+      expect(sheetNames).toContain("API 항목");
     });
 
     it("기존 파일이 있고 force가 false면 오류를 던져야 한다", async () => {
