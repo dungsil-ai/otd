@@ -62,9 +62,6 @@
         display: flex;
         gap: 8px;
       }
-      .input-row input[type="url"] {
-        flex: 1;
-      }
       input[type="url"],
       input[type="file"] {
         min-height: 38px;
@@ -73,6 +70,9 @@
         padding: 7px 10px;
         box-sizing: border-box;
         background: #fff;
+      }
+      .input-row input[type="url"] {
+        flex: 1;
       }
       .controls {
         display: flex;
@@ -312,7 +312,7 @@
     </header>
 
     <main class="input-panel">
-      <div class="input-grid" aria-label="OpenAPI 입력 방식">
+      <div class="input-grid">
         <section class="input-card" aria-labelledby="fileInputTitle">
           <label id="fileInputTitle" for="sourceFile">파일에서 불러오기</label>
           <p>로컬 YAML, YML, JSON 파일을 선택하면 아래 입력 창과 미리 보기가 갱신됩니다.</p>
