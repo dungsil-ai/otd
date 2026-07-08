@@ -17,17 +17,29 @@
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["openapi", "xlsx", "api", "documentation", "cli"],
+  "keywords": [
+    "openapi",
+    "xlsx",
+    "api",
+    "documentation",
+    "cli"
+  ],
   "author": "",
   "license": "MIT",
-  "files": ["src", "scripts", "package.json", "tsconfig.json", "README.md"],
+  "files": [
+    "src",
+    "scripts",
+    "package.json",
+    "tsconfig.json",
+    "README.md"
+  ],
   "dependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
     "exceljs": "^4.4.0",
     "openapi-sampler": "^1.7.4"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.0",
+    "@biomejs/biome": "^2.5.2",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@types/openapi-sampler": "^1.0.3",

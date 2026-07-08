@@ -3,7 +3,7 @@
  * @module tests/parser.test
  */
 
-import { beforeAll, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { AppError } from "../src/models/types";
 import { parseOpenApi } from "../src/parser/openapi-parser";
 
