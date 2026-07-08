@@ -188,7 +188,9 @@ export function createWorkbook(data: XlsxData): ExcelJS.Workbook {
   workbook.created = new Date();
 
   createOverviewSheet(workbook, data);
-  createAuthSheet(workbook, data.securitySchemes);
+  if (data.securitySchemes.length > 0) {
+    createAuthSheet(workbook, data.securitySchemes);
+  }
   createEndpointsSheet(workbook, data.endpoints);
   createTagSheets(workbook, data);
 
