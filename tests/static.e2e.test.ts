@@ -208,6 +208,40 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("미리 보기 탭이 많아지면 가로 스크롤을 사용해야 한다", async () => {
+    const context = await browser.newContext({ viewport: { width: 520, height: 720 } });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceText", buildTaggedOpenApi(12));
+      await expectPreviewPath(page, "/tag-1");
+
+      const tabLayout = await page.evaluate(() => {
+        const tabs = document.querySelector(".preview-tabs");
+        const firstButton = document.querySelector(".preview-tab-btn");
+        if (!(tabs instanceof HTMLElement) || !(firstButton instanceof HTMLElement)) return null;
+        const style = getComputedStyle(tabs);
+        const buttonStyle = getComputedStyle(firstButton);
+        return {
+          flexWrap: style.flexWrap,
+          overflowX: style.overflowX,
+          scrollWidth: tabs.scrollWidth,
+          clientWidth: tabs.clientWidth,
+          buttonFlexShrink: buttonStyle.flexShrink,
+        };
+      });
+
+      expect(tabLayout).not.toBeNull();
+      expect(tabLayout?.flexWrap).toBe("nowrap");
+      expect(tabLayout?.overflowX).toBe("auto");
+      expect(tabLayout?.scrollWidth).toBeGreaterThan(tabLayout?.clientWidth ?? 0);
+      expect(tabLayout?.buttonFlexShrink).toBe("0");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("content 쿼리 스트링으로 직접 입력 내용을 프리셋하고 미리 보기를 갱신해야 한다", async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -376,6 +410,36 @@ function buildInlineOpenApi(description: string, path: string): string {
         },
       },
     },
+  });
+}
+
+function buildTaggedOpenApi(tagCount: number): string {
+  const paths: Record<string, unknown> = {};
+  const tags = Array.from({ length: tagCount }, (_, index) => {
+    const tagNumber = index + 1;
+    const name = `tag-${tagNumber}`;
+    paths[`/${name}`] = {
+      get: {
+        tags: [name],
+        summary: `${name} 조회`,
+        responses: {
+          "200": {
+            description: "성공",
+          },
+        },
+      },
+    };
+    return { name, description: `매우 긴 ${name} 미리보기` };
+  });
+
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Many Tagged API",
+      version: "1.0.0",
+    },
+    tags,
+    paths,
   });
 }
 
