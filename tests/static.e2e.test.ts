@@ -483,9 +483,18 @@ async function verifyPreview(
   });
   expect(isPreviewVisible).toBe(true);
 
-  // 최소 3개의 탭 버튼(개요, 인증, API 항목)이 있어야 한다
-  const tabCount = await page.evaluate(() => document.querySelectorAll(".preview-tab-btn").length);
-  expect(tabCount).toBeGreaterThanOrEqual(3);
+  const tabLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+      (tab) => tab.textContent?.trim() ?? ""
+    )
+  );
+  expect(tabLabels).toContain("개요");
+  expect(tabLabels).toContain("API 항목");
+  if (fixture.expectedAuthSheet) {
+    expect(tabLabels).toContain("인증");
+  } else {
+    expect(tabLabels).not.toContain("인증");
+  }
 
   // "API 항목" 탭 클릭 후 엔드포인트 행 수 검증
   await page.evaluate(() => {
