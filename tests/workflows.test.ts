@@ -18,6 +18,7 @@ type ReleaseActionStep = {
 const workflowFiles = [
   ".github/workflows/ci.yml",
   ".github/workflows/nightly-release.yml",
+  ".github/workflows/pages.yml",
   ".github/workflows/preview.yml",
   ".github/workflows/release.yml",
 ];
@@ -209,5 +210,50 @@ describe("GitHub Actions workflows", () => {
         "dist/openapi-to-document.js"
       );
     }
+  });
+
+  it("pages workflow should deploy static site to the gh-pages branch", () => {
+    const content = readFileSync(join(process.cwd(), ".github/workflows/pages.yml"), "utf8");
+
+    expect(content).toContain("uses: actions/upload-artifact@v4");
+    expect(content).toContain("uses: actions/download-artifact@v4");
+    expect(content).toContain("Deploy Pages to gh-pages");
+    expect(content).toContain("contents: write");
+    expect(content).toContain("git fetch --depth=1 origin gh-pages");
+    expect(content).toContain("git push origin HEAD:gh-pages");
+    expect(content).toContain("! -name preview ! -name CNAME");
+    expect(content).not.toContain("actions/deploy-pages");
+    expect(content).not.toContain("actions/upload-pages-artifact");
+  });
+
+  it("release and nightly workflows should inject the build date automatically", () => {
+    const releaseWorkflowFiles = [
+      ".github/workflows/release.yml",
+      ".github/workflows/nightly-release.yml",
+    ];
+
+    for (const file of releaseWorkflowFiles) {
+      const content = readFileSync(join(process.cwd(), file), "utf8");
+
+      expect(content, `${file} should calculate the UTC build date`).toContain(
+        "OTD_BUILD_DATE=$(date -u +%F)"
+      );
+      expect(content, `${file} should export the build date to later build steps`).toContain(
+        'echo "OTD_BUILD_DATE=$OTD_BUILD_DATE"'
+      );
+    }
+  });
+
+  it("nightly release should skip tag creation when the latest nightly tag targets HEAD", () => {
+    const content = readFileSync(
+      join(process.cwd(), ".github/workflows/nightly-release.yml"),
+      "utf8"
+    );
+
+    expect(content).toContain("id: nightly-change-check");
+    expect(content).toContain("fetch-depth: 0");
+    expect(content).toContain("git rev-list -n 1");
+    expect(content).toContain("should_release=false");
+    expect(content).toContain("if: needs.changes.outputs.should_release == 'true'");
   });
 });

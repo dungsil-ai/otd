@@ -4,34 +4,70 @@ import "./buffer-polyfill";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
+import type { XlsxData } from "../models/types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
 import { createWorkbook } from "../writer/xlsx-writer";
 import { renderPreview } from "./openapi-preview";
 
 type UiState = {
+  previewRequestId: number;
+  previewTimer: ReturnType<typeof setTimeout> | null;
   sourceName: string;
 };
 
+const PREVIEW_DEBOUNCE_MS = 300;
+
 const uiState: UiState = {
+  previewRequestId: 0,
+  previewTimer: null,
   sourceName: "openapi",
 };
 
 const sourceInput = getElement<HTMLInputElement>("sourceFile");
 const sourceText = getElement<HTMLTextAreaElement>("sourceText");
+const sourceUrlInput = getElement<HTMLInputElement>("sourceUrl");
+const loadUrlButton = getElement<HTMLButtonElement>("loadUrlBtn");
 const convertButton = getElement<HTMLButtonElement>("convertBtn");
 const statusText = getElement<HTMLParagraphElement>("status");
 const previewContainer = getElement<HTMLDivElement>("preview");
 
 sourceInput.addEventListener("change", async () => {
-  const file = sourceInput.files?.[0];
-  if (!file) {
-    return;
-  }
+  try {
+    const file = sourceInput.files?.[0];
+    if (!file) {
+      return;
+    }
 
-  uiState.sourceName = getFileNameWithoutExt(file.name);
-  sourceText.value = await file.text();
-  setStatus(`파일 로드 완료: ${file.name}`);
+    uiState.sourceName = getFileNameWithoutExt(file.name);
+    sourceText.value = await file.text();
+    setStatus(`파일 로드 완료: ${file.name}`);
+    await updatePreview();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`파일 로드 오류: ${message}`, true);
+  }
 });
+
+sourceText.addEventListener("input", () => {
+  if (!sourceInput.files?.[0] && !sourceUrlInput.value.trim()) {
+    uiState.sourceName = "openapi";
+  }
+  schedulePreviewUpdate();
+});
+
+sourceUrlInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void loadFromUrl();
+  }
+});
+
+loadUrlButton.addEventListener("click", () => {
+  void loadFromUrl();
+});
+
+void initializeFromQueryParams();
 
 convertButton.addEventListener("click", async () => {
   try {
@@ -40,13 +76,12 @@ convertButton.addEventListener("click", async () => {
       throw new Error("OpenAPI 문서 내용을 입력하세요.");
     }
 
+    cancelPreviewUpdate();
     resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
-    const document = await parseOpenApiFromText(raw);
-    const validated = validateOpenApiDocument(document);
+    const xlsxData = await buildXlsxDataFromText(raw);
 
-    setStatus("엔드포인트 추출 및 미리 보기 생성 중...");
-    const xlsxData = extractEndpoints(validated);
+    setStatus("미리 보기 생성 중...");
     renderPreview(xlsxData, previewContainer);
 
     setStatus("엑셀 파일 생성 중...");
@@ -61,6 +96,120 @@ convertButton.addEventListener("click", async () => {
     setStatus(`오류: ${message}`, true);
   }
 });
+
+async function initializeFromQueryParams(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  const presetUrl = params.get("url")?.trim();
+  const presetContent = params.get("content");
+
+  if (presetUrl) {
+    sourceUrlInput.value = presetUrl;
+  }
+
+  if (presetContent !== null) {
+    sourceText.value = presetContent;
+    uiState.sourceName = "openapi";
+    await updatePreview();
+    return;
+  }
+
+  if (presetUrl) {
+    await loadFromUrl();
+  }
+}
+
+async function loadFromUrl(): Promise<void> {
+  const rawUrl = sourceUrlInput.value.trim();
+  if (!rawUrl) {
+    setStatus("OpenAPI 문서 URL을 입력하세요.", true);
+    return;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    setStatus("올바른 URL 형식이 아닙니다.", true);
+    return;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    setStatus("HTTP 또는 HTTPS URL만 지원합니다.", true);
+    return;
+  }
+
+  try {
+    cancelPreviewUpdate();
+    resetPreview();
+    setStatus("URL에서 OpenAPI 문서를 불러오는 중...");
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+    }
+
+    sourceText.value = await response.text();
+    uiState.sourceName = getSourceNameFromUrl(url);
+    setStatus(`URL 로드 완료: ${url.href}`);
+    await updatePreview();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`URL 로드 오류: ${message}`, true);
+  }
+}
+
+async function updatePreview(): Promise<void> {
+  const requestId = ++uiState.previewRequestId;
+  const raw = sourceText.value.trim();
+
+  if (!raw) {
+    resetPreview();
+    setStatus("");
+    return;
+  }
+
+  try {
+    setStatus("미리 보기 업데이트 중...");
+    const xlsxData = await buildXlsxDataFromText(raw);
+    if (requestId !== uiState.previewRequestId) return;
+
+    renderPreview(xlsxData, previewContainer);
+    setStatus(`미리 보기 업데이트 완료: ${xlsxData.endpoints.length}개 API 항목`);
+  } catch (error) {
+    if (requestId !== uiState.previewRequestId) return;
+
+    const message = error instanceof Error ? error.message : String(error);
+    resetPreview();
+    setStatus(`미리 보기 오류: ${message}`, true);
+  }
+}
+
+function schedulePreviewUpdate(): void {
+  clearPreviewTimer();
+  uiState.previewTimer = setTimeout(() => {
+    uiState.previewTimer = null;
+    void updatePreview();
+  }, PREVIEW_DEBOUNCE_MS);
+}
+
+function cancelPreviewUpdate(): void {
+  clearPreviewTimer();
+  uiState.previewRequestId++;
+}
+
+function clearPreviewTimer(): void {
+  if (uiState.previewTimer === null) return;
+
+  clearTimeout(uiState.previewTimer);
+  uiState.previewTimer = null;
+}
+
+async function buildXlsxDataFromText(raw: string): Promise<XlsxData> {
+  const document = await parseOpenApiFromText(raw);
+  const validated = validateOpenApiDocument(document);
+  return extractEndpoints(validated);
+}
 
 async function parseOpenApiFromText(raw: string): Promise<OpenAPI.Document> {
   const parsed = jsYaml.load(raw) as OpenAPI.Document;
@@ -108,6 +257,11 @@ function getElement<T extends HTMLElement>(id: string): T {
     throw new Error(`필수 DOM 요소를 찾을 수 없습니다: #${id}`);
   }
   return element as T;
+}
+
+function getSourceNameFromUrl(url: URL): string {
+  const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+  return lastSegment ? getFileNameWithoutExt(lastSegment) : "openapi";
 }
 
 function getFileNameWithoutExt(fileName: string): string {

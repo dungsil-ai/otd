@@ -4,7 +4,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 import ExcelJS from "exceljs";
@@ -18,6 +18,7 @@ type Fixture =
       shouldError: false;
       expectedTitle: string;
       expectedFirstEndpoint: { method: string; path: string } | null;
+      expectedAuthSheet: boolean;
     }
   | {
       name: string;
@@ -33,6 +34,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Minimal API",
     expectedFirstEndpoint: { method: "GET", path: "/health" },
+    expectedAuthSheet: false,
   },
   {
     name: "complete.yaml",
@@ -40,6 +42,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Complete API",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   {
     name: "edge-cases.yaml",
@@ -47,6 +50,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Edge Cases API",
     expectedFirstEndpoint: { method: "GET", path: "/" },
+    expectedAuthSheet: true,
   },
   {
     name: "empty-paths.yaml",
@@ -54,6 +58,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Empty Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "no-paths.yaml",
@@ -61,6 +66,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "No Paths API",
     expectedFirstEndpoint: null,
+    expectedAuthSheet: false,
   },
   {
     name: "large-100-endpoints.yaml",
@@ -68,6 +74,7 @@ const FIXTURES: Fixture[] = [
     shouldError: false,
     expectedTitle: "Large API (100 Endpoints)",
     expectedFirstEndpoint: { method: "GET", path: "/users" },
+    expectedAuthSheet: true,
   },
   { name: "swagger-v2.yaml", expectedEndpoints: null, shouldError: true, expectedError: "v2" },
 ];
@@ -78,12 +85,8 @@ describe("Static HTML Converter E2E", () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    // dist 디렉토리가 없거나 필수 파일이 없으면 빌드
-    const distIndexHtml = join(process.cwd(), "dist", "index.html");
-    const distJs = join(process.cwd(), "dist", "openapi-to-document.js");
-    if (!existsSync(distIndexHtml) || !existsSync(distJs)) {
-      await $`bun run build`.quiet();
-    }
+    // 정적 파일 변경사항이 E2E 테스트에 항상 반영되도록 먼저 빌드
+    await $`bun run build`.quiet();
 
     // dist 디렉토리를 정적으로 서빙하는 로컬 HTTP 서버 시작
     server = Bun.serve({
@@ -91,7 +94,8 @@ describe("Static HTML Converter E2E", () => {
       fetch(req) {
         const url = new URL(req.url);
         const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-        const fullPath = join(process.cwd(), "dist", pathname);
+        const baseDir = pathname.startsWith("/fixtures/") ? "tests" : "dist";
+        const fullPath = join(process.cwd(), baseDir, pathname);
         const file = Bun.file(fullPath);
         return new Response(file);
       },
@@ -190,7 +194,296 @@ describe("Static HTML Converter E2E", () => {
       }, 120_000);
     }
   }
+
+  it("입력 내용 변경만으로 미리 보기를 즉시 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+
+      await page.fill("#sourceText", buildInlineOpenApi("첫 번째 API", "/first"));
+      await page.waitForFunction(() => document.getElementById("preview")?.hidden === false, {
+        timeout: 30_000,
+      });
+      await expectPreviewPath(page, "/first");
+
+      await page.fill("#sourceText", buildInlineOpenApi("두 번째 API", "/second"));
+      await expectPreviewPath(page, "/second");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("미리 보기 탭이 많아지면 가로 스크롤을 사용해야 한다", async () => {
+    const context = await browser.newContext({ viewport: { width: 520, height: 720 } });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceText", buildTaggedOpenApi(12));
+      await expectPreviewPath(page, "/tag-1");
+
+      const tabLayout = await page.evaluate(() => {
+        const tabs = document.querySelector(".preview-tabs");
+        const firstButton = document.querySelector(".preview-tab-btn");
+        if (!(tabs instanceof HTMLElement) || !(firstButton instanceof HTMLElement)) return null;
+        const style = getComputedStyle(tabs);
+        const buttonStyle = getComputedStyle(firstButton);
+        return {
+          flexWrap: style.flexWrap,
+          overflowX: style.overflowX,
+          scrollWidth: tabs.scrollWidth,
+          clientWidth: tabs.clientWidth,
+          buttonFlexShrink: buttonStyle.flexShrink,
+        };
+      });
+
+      expect(tabLayout).not.toBeNull();
+      expect(tabLayout?.flexWrap).toBe("nowrap");
+      expect(tabLayout?.overflowX).toBe("auto");
+      expect(tabLayout?.scrollWidth).toBeGreaterThan(tabLayout?.clientWidth ?? 0);
+      expect(tabLayout?.buttonFlexShrink).toBe("0");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("content 쿼리 스트링으로 직접 입력 내용을 프리셋하고 미리 보기를 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      const content = buildInlineOpenApi("쿼리 프리셋 API", "/preset-content");
+      await page.goto(`${baseUrl}/?content=${encodeURIComponent(content)}`);
+
+      await expectPreviewPath(page, "/preset-content");
+      const textValue = await page.inputValue("#sourceText");
+      expect(textValue).toBe(content);
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("content 쿼리 스트링의 추가 서버 설명 HTML을 실행 가능한 마크업으로 렌더링하지 않아야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      const content = buildInlineOpenApiWithServers(
+        '<img src=x onerror="window.__otdXss=1">',
+        "/safe-server-description"
+      );
+      await page.goto(`${baseUrl}/?content=${encodeURIComponent(content)}`);
+      await expectPreviewPath(page, "/safe-server-description");
+
+      const result = await page.evaluate(() => {
+        const preview = document.getElementById("preview");
+        return {
+          executed: (window as Window & { __otdXss?: number }).__otdXss === 1,
+          imageCount: preview?.querySelectorAll("img").length ?? 0,
+          text: preview?.textContent ?? "",
+        };
+      });
+
+      expect(result.executed).toBe(false);
+      expect(result.imageCount).toBe(0);
+      expect(result.text).toContain('<img src=x onerror="window.__otdXss=1">');
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("url 쿼리 스트링으로 URL 입력값을 프리셋하고 문서를 불러와야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      const presetUrl = `${baseUrl}/fixtures/minimal.yaml`;
+      await page.goto(`${baseUrl}/?url=${encodeURIComponent(presetUrl)}`);
+
+      await expectPreviewPath(page, "/health");
+      expect(await page.inputValue("#sourceUrl")).toBe(presetUrl);
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("URL로 불러온 내용을 수정해도 원본 기반 XLSX 파일명을 유지해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/minimal.yaml`);
+      await page.click("#loadUrlBtn");
+      await expectPreviewPath(page, "/health");
+
+      await page.fill("#sourceText", buildInlineOpenApi("수정된 API", "/edited-url"));
+      await expectPreviewPath(page, "/edited-url");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("URL 입력으로 OpenAPI 문서를 불러와 미리 보기와 XLSX 파일명을 갱신해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/minimal.yaml`);
+      await page.click("#loadUrlBtn");
+
+      await expectPreviewPath(page, "/health");
+      const status = await page.textContent("#status");
+      expect(status).toContain("미리 보기 업데이트 완료");
+
+      const textValue = await page.inputValue("#sourceText");
+      expect(textValue).toContain("Minimal API");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("minimal.xlsx");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it("파일 업로드 후 미리 보기와 개행 렌더링을 갱신해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      const multilineDescription = ["첫 줄", "둘째 줄"].join("\n");
+
+      await page.setInputFiles("#sourceFile", {
+        name: "inline.yaml",
+        mimeType: "application/yaml",
+        buffer: Buffer.from(buildInlineOpenApi(multilineDescription, "/uploaded")),
+      });
+
+      await expectPreviewPath(page, "/uploaded");
+      const overviewDescriptionStyle = await page.evaluate(() => {
+        const preview = document.getElementById("preview");
+        const cell = preview?.querySelector(".preview-table tbody tr:nth-child(4) td");
+        if (!(cell instanceof HTMLElement)) return null;
+        return {
+          text: cell.textContent,
+          whiteSpace: getComputedStyle(cell).whiteSpace,
+        };
+      });
+
+      expect(overviewDescriptionStyle?.text).toBe(multilineDescription);
+      expect(overviewDescriptionStyle?.whiteSpace).toContain("pre");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
 });
+
+function buildInlineOpenApi(description: string, path: string): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Inline API",
+      version: "1.0.0",
+      description,
+    },
+    paths: {
+      [path]: {
+        get: {
+          summary: "상태 조회",
+          responses: {
+            "200": {
+              description: "성공",
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function buildTaggedOpenApi(tagCount: number): string {
+  const paths: Record<string, unknown> = {};
+  const tags = Array.from({ length: tagCount }, (_, index) => {
+    const tagNumber = index + 1;
+    const name = `tag-${tagNumber}`;
+    paths[`/${name}`] = {
+      get: {
+        tags: [name],
+        summary: `${name} 조회`,
+        responses: {
+          "200": {
+            description: "성공",
+          },
+        },
+      },
+    };
+    return { name, description: `매우 긴 ${name} 미리보기` };
+  });
+
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Many Tagged API",
+      version: "1.0.0",
+    },
+    tags,
+    paths,
+  });
+}
+
+function buildInlineOpenApiWithServers(serverDescription: string, path: string): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: {
+      title: "Inline Server API",
+      version: "1.0.0",
+    },
+    servers: [
+      { url: "https://dev.example.com", description: "개발" },
+      { url: "https://prod.example.com", description: "운영" },
+      { url: "https://extra.example.com", description: serverDescription },
+    ],
+    paths: {
+      [path]: {
+        get: {
+          summary: "상태 조회",
+          responses: {
+            "200": {
+              description: "성공",
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+async function expectPreviewPath(page: import("playwright").Page, path: string): Promise<void> {
+  await page.waitForFunction(
+    (expectedPath) => document.getElementById("preview")?.textContent?.includes(expectedPath),
+    path,
+    { timeout: 30_000 }
+  );
+}
 
 async function verifyXlsx(
   filePath: string,
@@ -202,7 +495,11 @@ async function verifyXlsx(
   // 필수 시트 존재 확인
   const sheetNames = workbook.worksheets.map((ws) => ws.name);
   expect(sheetNames).toContain("개요");
-  expect(sheetNames).toContain("인증");
+  if (fixture.expectedAuthSheet) {
+    expect(sheetNames).toContain("인증");
+  } else {
+    expect(sheetNames).not.toContain("인증");
+  }
   expect(sheetNames).toContain("API 항목");
 
   // 개요 시트: API 제목 확인 (B2="속성"/C2="값" 헤더, B3="제목"/C3=title 데이터)
@@ -250,9 +547,18 @@ async function verifyPreview(
   });
   expect(isPreviewVisible).toBe(true);
 
-  // 최소 3개의 탭 버튼(개요, 인증, API 항목)이 있어야 한다
-  const tabCount = await page.evaluate(() => document.querySelectorAll(".preview-tab-btn").length);
-  expect(tabCount).toBeGreaterThanOrEqual(3);
+  const tabLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+      (tab) => tab.textContent?.trim() ?? ""
+    )
+  );
+  expect(tabLabels).toContain("개요");
+  expect(tabLabels).toContain("API 항목");
+  if (fixture.expectedAuthSheet) {
+    expect(tabLabels).toContain("인증");
+  } else {
+    expect(tabLabels).not.toContain("인증");
+  }
 
   // "API 항목" 탭 클릭 후 엔드포인트 행 수 검증
   await page.evaluate(() => {

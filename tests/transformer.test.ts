@@ -60,6 +60,45 @@ describe("Endpoint Extractor", () => {
       }
     });
 
+    it("같은 경로의 API 항목은 지정된 HTTP 메서드 순서로 정렬되어야 한다", () => {
+      const document: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: {
+          title: "정렬 테스트 API",
+          version: "1.0.0",
+        },
+        paths: {
+          "/sort-test": {
+            delete: {
+              responses: { "204": { description: "삭제됨" } },
+            },
+            put: {
+              responses: { "200": { description: "수정됨" } },
+            },
+            patch: {
+              responses: { "200": { description: "부분 수정됨" } },
+            },
+            post: {
+              responses: { "201": { description: "생성됨" } },
+            },
+            get: {
+              responses: { "200": { description: "조회됨" } },
+            },
+          },
+        },
+      };
+
+      const result = extractEndpoints(document);
+
+      expect(result.endpoints.map((endpoint) => endpoint.method)).toEqual([
+        "GET",
+        "POST",
+        "PATCH",
+        "PUT",
+        "DELETE",
+      ]);
+    });
+
     it("파라미터 정보가 추출되어야 한다", () => {
       const result = extractEndpoints(completeDoc);
 
