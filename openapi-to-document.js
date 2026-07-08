@@ -48322,7 +48322,7 @@ _registerSampler("object", sampleObject);
 _registerSampler("string", sampleString);
 
 // src/transformer/endpoint-extractor.ts
-var HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+var HTTP_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS"];
 function extractEndpoints(document2) {
   return {
     meta: extractMetaInfo(document2),
