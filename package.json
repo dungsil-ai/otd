@@ -8,6 +8,7 @@
     "otd": "./src/index.ts"
   },
   "scripts": {
+    "postinstall": "bunx playwright install --with-deps chromium",
     "dev": "bun run src/index.ts",
     "build": "bun run scripts/build.mjs",
     "build:exe": "bun run scripts/build-exe.mjs",
