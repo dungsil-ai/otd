@@ -21,7 +21,7 @@ import type {
 } from "../models/types";
 
 /** 지원하는 HTTP 메서드 목록 */
-const HTTP_METHODS: HttpMethod[] = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+const HTTP_METHODS: HttpMethod[] = ["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS"];
 
 /**
  * OpenAPI 문서에서 XLSX 생성에 필요한 데이터를 추출합니다.

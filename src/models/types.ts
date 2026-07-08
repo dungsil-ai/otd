@@ -8,7 +8,7 @@
 // ============================================================================
 
 /** 지원하는 HTTP 메서드 */
-export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS";
+export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "HEAD" | "OPTIONS";
 
 // ============================================================================
 // OpenAPI 변환 관련 타입
