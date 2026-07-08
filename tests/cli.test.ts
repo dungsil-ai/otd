@@ -142,6 +142,12 @@ describe("CLI Commands", () => {
       expect(buildDate).toBe("2030-01-03");
     });
 
+    it("resolveBuildDate should use a stable development default without injected metadata", () => {
+      const buildDate = resolveBuildDate();
+
+      expect(buildDate).toBe("development");
+    });
+
     it("resolvePackageVersionFrom should traverse parent directories", () => {
       const root = mkdtempSync(join(tmpdir(), "otd-cli-version-"));
       tempDirs.push(root);
