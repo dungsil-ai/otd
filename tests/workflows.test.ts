@@ -244,6 +244,18 @@ describe("GitHub Actions workflows", () => {
     }
   });
 
+  it("수동 릴리스는 태그가 없으면 생성한 뒤 해당 태그를 사용해야 한다", () => {
+    const content = readFileSync(join(process.cwd(), ".github/workflows/release.yml"), "utf8");
+
+    expect(content).toContain("fetch-depth: 0");
+    expect(content).toContain("git fetch --force --tags origin");
+    expect(content).toContain('if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then');
+    expect(content).toContain('git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG"');
+    expect(content).toContain('git tag "$RELEASE_TAG"');
+    expect(content).toContain('git push origin "refs/tags/$RELEASE_TAG"');
+    expect(content).toContain('git checkout --detach "$RELEASE_TAG"');
+  });
+
   it("nightly release should skip tag creation when the latest nightly tag targets HEAD", () => {
     const content = readFileSync(
       join(process.cwd(), ".github/workflows/nightly-release.yml"),

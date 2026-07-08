@@ -19,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout release source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       - name: Resolve and validate release tag
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -43,10 +48,24 @@ jobs:
 
           echo "RELEASE_TAG=$TAG_NAME" >> "$GITHUB_ENV"
 
-      - name: Checkout release tag
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ env.RELEASE_TAG }}
+      - name: Ensure release tag exists
+        run: |
+          git fetch --force --tags origin
+
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
+            git checkout --detach "$RELEASE_TAG"
+            exit 0
+          fi
+
+          if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            git checkout --detach "$RELEASE_TAG"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$RELEASE_TAG"
+          git push origin "refs/tags/$RELEASE_TAG"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
