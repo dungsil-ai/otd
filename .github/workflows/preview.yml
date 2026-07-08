@@ -142,7 +142,7 @@ jobs:
             const body = [
               '📊 **PR 미리보기가 생성되었습니다**',
               '',
-              `[🌐 정적 변환기 미리보기](${previewUrl})`,
+              `[🌐 정적 변환기 미리보기](${previewUrl}?url=https://petstore3.swagger.io/api/v3/openapi.json)`,
               `[📥 complete-preview.xlsx 다운로드](${downloadUrl})`,
               '',
               `> 정적 페이지는 \`gh-pages\` 브랜치의 \`preview/pr-${context.issue.number}\` 경로에 배포됩니다.`,
