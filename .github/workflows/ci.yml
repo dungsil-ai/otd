@@ -39,7 +39,7 @@ jobs:
         run: bun run typecheck
 
       - name: Test Gradle plugin
-        run: bash gradle-plugin/gradlew -p gradle-plugin check
+        run: ./gradle-plugin/gradlew -p gradle-plugin check
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium

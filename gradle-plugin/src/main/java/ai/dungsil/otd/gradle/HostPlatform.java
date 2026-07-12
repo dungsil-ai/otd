@@ -3,11 +3,20 @@ package ai.dungsil.otd.gradle;
 import java.util.Locale;
 import org.gradle.api.GradleException;
 
+/** 호스트 플랫폼과 대응하는 OTD 릴리스 자산 */
 record HostPlatform(String operatingSystem, String architecture, String assetName) {
     static HostPlatform current() {
         return detect(System.getProperty("os.name", ""), System.getProperty("os.arch", ""));
     }
 
+    /**
+     * OS 및 아키텍처 이름 정규화
+     *
+     * @param osName JVM의 OS 이름
+     * @param osArch JVM의 아키텍처 이름
+     * @return 지원되는 호스트 플랫폼
+     * @throws GradleException 대응하는 릴리스 실행 파일이 없는 경우
+     */
     static HostPlatform detect(String osName, String osArch) {
         String normalizedOs = osName.toLowerCase(Locale.ROOT);
         String operatingSystem;

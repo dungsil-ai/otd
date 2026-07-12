@@ -1,6 +1,7 @@
 package ai.dungsil.otd.gradle;
 
 import java.io.File;
+
 import java.util.Collections;
 import java.util.Set;
 import org.gradle.api.Plugin;
@@ -10,7 +11,7 @@ import org.gradle.api.file.RegularFile;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskProvider;
 
-/** Wires springdoc OpenAPI generation to OTD XLSX conversion. */
+/** Springdoc OpenAPI 생성과 OTD XLSX 변환 연결 */
 public final class OpenApiToDocumentPlugin implements Plugin<Project> {
     static final String EXTENSION_NAME = "openApiDocument";
     static final String GENERATE_TASK_NAME = "generateApiDocument";
@@ -23,7 +24,7 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
     private static final String DEFAULT_DOWNLOAD_BASE_URL =
             "https://github.com/dungsil-ai/otd/releases/download";
 
-    /** Creates the plugin. */
+    /** 플러그인 생성 */
     public OpenApiToDocumentPlugin() {}
 
     @Override
@@ -49,7 +50,6 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
                                 + "/"
                                 + asset));
         Provider<RegularFile> cachedExecutable = project.getLayout().file(cachedExecutableFile);
-        extension.getExecutable().convention(cachedExecutable);
 
         TaskProvider<DownloadOtdExecutableTask> downloadTask = project.getTasks().register(
                 DOWNLOAD_TASK_NAME,
@@ -61,7 +61,7 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
                     task.getDestinationFile().convention(cachedExecutable);
                     task.onlyIf(
                             "the managed OTD executable is selected and OpenAPI inputs are configured",
-                            ignored -> shouldDownload(extension, task));
+                            ignored -> shouldDownload(extension));
                 });
 
         TaskProvider<GenerateApiDocumentTask> generateTask = project.getTasks().register(
@@ -74,7 +74,7 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
                     task.getOpenApiFiles().from(extension.getOpenApiFiles());
                     task.getOutputDirectory().convention(extension.getOutputDirectory());
                     task.getOutputFileName().convention(extension.getOutputFileName());
-                    task.getOtdExecutable().convention(extension.getExecutable());
+                    task.getOtdExecutable().convention(extension.getExecutable().orElse(cachedExecutable));
                     task.getExecutableArgs().convention(extension.getExecutableArgs());
                     task.dependsOn(downloadTask);
                 });
@@ -97,15 +97,8 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
         generateTask.configure(task -> task.dependsOn(springdocTask));
     }
 
-    private static boolean shouldDownload(
-            OpenApiDocumentExtension extension, DownloadOtdExecutableTask task) {
-        if (extension.getOpenApiFiles().isEmpty()) {
-            return false;
-        }
-        File selected = extension.getExecutable().get().getAsFile();
-        File managed = task.getDestinationFile().get().getAsFile();
-        return selected.toPath().toAbsolutePath().normalize().equals(
-                managed.toPath().toAbsolutePath().normalize());
+    private static boolean shouldDownload(OpenApiDocumentExtension extension) {
+        return !extension.getOpenApiFiles().isEmpty() && !extension.getExecutable().isPresent();
     }
 
     private static String versionedReleaseUrl(String baseUrl, String version) {

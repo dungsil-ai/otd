@@ -32,15 +32,15 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.gradle.work.DisableCachingByDefault;
 
-/** Converts configured OpenAPI inputs into XLSX API specification documents. */
+/** OpenAPI 입력을 XLSX API 명세서로 변환 */
 @DisableCachingByDefault(because = "OTD embeds creation metadata in generated workbooks")
 public abstract class GenerateApiDocumentTask extends DefaultTask {
     private final ExecOperations execOperations;
 
     /**
-     * Creates the conversion task.
+     * 변환 태스크 생성
      *
-     * @param execOperations Gradle process execution service
+     * @param execOperations Gradle 프로세스 실행 서비스
      */
     @Inject
     public GenerateApiDocumentTask(ExecOperations execOperations) {
@@ -48,34 +48,34 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     }
 
     /**
-     * Returns the OpenAPI JSON or YAML input files.
+     * OpenAPI JSON 또는 YAML 입력 파일 반환
      *
-     * @return OpenAPI inputs
+     * @return OpenAPI 입력 파일
      */
     @InputFiles
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getOpenApiFiles();
 
     /**
-     * Returns the directory that receives generated documents.
+     * 생성 문서 출력 디렉터리 반환
      *
-     * @return output directory
+     * @return 출력 디렉터리
      */
     @Internal
     public abstract DirectoryProperty getOutputDirectory();
 
     /**
-     * Returns an optional output name for a single input.
+     * 단일 입력에 사용할 선택적 출력 파일명 반환
      *
-     * @return optional output file name
+     * @return 선택적 출력 파일명
      */
     @Internal
     public abstract Property<String> getOutputFileName();
 
     /**
-     * Returns the OTD executable to invoke.
+     * 실행할 OTD 파일 반환
      *
-     * @return OTD executable
+     * @return OTD 실행 파일
      */
     @Optional
     @InputFile
@@ -83,17 +83,18 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     public abstract RegularFileProperty getOtdExecutable();
 
     /**
-     * Returns arguments inserted before OTD CLI arguments.
+     * OTD CLI 인수 앞에 삽입할 실행 인수 반환
      *
-     * @return executable prefix arguments
+     * @return 실행 접두 인수
      */
     @Input
     public abstract ListProperty<String> getExecutableArgs();
 
     /**
-     * Returns the XLSX files produced by this task.
+     * 태스크가 생성할 XLSX 파일 반환
      *
-     * @return generated documents
+     * @return 생성 문서
+     * @throws GradleException 입력과 출력 파일명 조합이 유효하지 않은 경우
      */
     @OutputFiles
     public Set<File> getGeneratedDocuments() {
@@ -102,7 +103,13 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    /** Runs OTD once for each configured OpenAPI input. */
+    /**
+     * API 명세서 생성
+     * <p>
+     * 구성된 OpenAPI 입력마다 OTD를 한 번 실행하고 새 출력 파일 생성을 검증한다.
+     *
+     * @throws GradleException 입력, 실행 파일 또는 생성 결과가 유효하지 않은 경우
+     */
     @TaskAction
     public void generate() {
         Map<Path, Path> conversions = createConversionPlan();
@@ -125,8 +132,9 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
         }
 
         for (Map.Entry<Path, Path> conversion : conversions.entrySet()) {
-            runOtd(conversion.getKey(), conversion.getValue());
             Path output = conversion.getValue();
+            deleteExistingOutput(output);
+            runOtd(conversion.getKey(), output);
             try {
                 if (!java.nio.file.Files.isRegularFile(output)
                         || java.nio.file.Files.size(output) == 0) {
@@ -135,6 +143,14 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
             } catch (IOException error) {
                 throw new GradleException("Unable to inspect generated document " + output, error);
             }
+        }
+    }
+
+    private static void deleteExistingOutput(Path output) {
+        try {
+            java.nio.file.Files.deleteIfExists(output);
+        } catch (IOException error) {
+            throw new GradleException("Unable to remove existing document " + output, error);
         }
     }
 
@@ -203,7 +219,15 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
 
         try {
             Path path = Path.of(name);
-            if (path.isAbsolute() || path.getNameCount() != 1 || name.equals(".") || name.equals("..")) {
+            if (path.isAbsolute()
+                    || path.getRoot() != null
+                    || path.getNameCount() != 1
+                    || !path.getFileName().toString().equals(name)
+                    || name.indexOf('/') >= 0
+                    || name.indexOf('\\') >= 0
+                    || name.indexOf(':') >= 0
+                    || name.equals(".")
+                    || name.equals("..")) {
                 throw new GradleException(
                         "openApiDocument.outputFileName must be a file name, not a path: " + value);
             }

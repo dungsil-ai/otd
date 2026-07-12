@@ -9,6 +9,10 @@ public final class FakeOtdMain {
     private FakeOtdMain() {}
 
     public static void main(String[] args) throws Exception {
+        if (Arrays.asList(args).contains("--no-output")) {
+            return;
+        }
+
         int outputOption = Arrays.asList(args).indexOf("--output");
         if (args.length < 4 || outputOption < 1 || outputOption + 1 >= args.length) {
             throw new IllegalArgumentException("Unexpected OTD arguments: " + Arrays.toString(args));

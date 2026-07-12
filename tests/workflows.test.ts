@@ -218,7 +218,7 @@ describe("GitHub Actions workflows", () => {
     expect(content).toContain("uses: actions/setup-java@v5");
     expect(content).toContain('java-version: "17"');
     expect(content).toContain("gradle-plugin/gradle/wrapper/gradle-wrapper.properties");
-    expect(content).toContain("bash gradle-plugin/gradlew -p gradle-plugin check");
+    expect(content).toContain("./gradle-plugin/gradlew -p gradle-plugin check");
   });
 
   it("pages workflow should deploy static site to the gh-pages branch", () => {
