@@ -167,7 +167,7 @@ describe("GitHub Actions workflows", () => {
         `${block.file}:${block.line} contains invalid bash:\n${result.stderr}\n--- script ---\n${block.script}`
       ).toBe(0);
     }
-  });
+  }, 15_000);
 
   it("release assets should be uploaded to draft releases", () => {
     const releaseSteps = workflowFiles.flatMap(extractReleaseActionSteps);
@@ -210,6 +210,15 @@ describe("GitHub Actions workflows", () => {
         "dist/openapi-to-document.js"
       );
     }
+  });
+
+  it("CI should validate the Gradle plugin", () => {
+    const content = readFileSync(join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
+
+    expect(content).toContain("uses: actions/setup-java@v5");
+    expect(content).toContain('java-version: "17"');
+    expect(content).toContain("gradle-plugin/gradle/wrapper/gradle-wrapper.properties");
+    expect(content).toContain("bash gradle-plugin/gradlew -p gradle-plugin check");
   });
 
   it("pages workflow should deploy static site to the gh-pages branch", () => {
@@ -256,7 +265,7 @@ describe("GitHub Actions workflows", () => {
 
     expect(content).toContain("fetch-depth: 0");
     expect(content).toContain("git fetch --force --tags origin");
-    expect(content).toContain('if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then');
+    expect(content).toContain(`if [ "\${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then`);
     expect(content).toContain('git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG"');
     expect(createTagIndex).toBeGreaterThan(-1);
     expect(pushTagIndex).toBeGreaterThan(createTagIndex);

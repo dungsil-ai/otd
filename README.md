@@ -81,6 +81,93 @@ otd spec.yaml -o ./docs/ --force
 
 출력 경로를 지정하지 않으면 입력 파일과 같은 위치에 같은 파일명의 `.xlsx` 파일을 생성합니다.
 
+## Springdoc Gradle 자동 변환
+
+`gradle-plugin/`의 플러그인은 Springdoc Gradle Plugin이 생성한 OpenAPI JSON/YAML을 받아 XLSX 명세서까지 연속으로 생성합니다. `generateApiDocument` 태스크 하나로 다음 작업을 실행합니다.
+
+1. `generateOpenApiDocs`를 실행해 Spring Boot 애플리케이션에서 OpenAPI 문서를 생성합니다.
+2. 현재 OS/아키텍처에 맞는 OTD 실행 파일을 Gradle 사용자 홈 캐시에 한 번 다운로드합니다.
+3. OpenAPI 파일마다 XLSX 명세서를 생성합니다.
+
+Gradle Plugin Portal 배포 전에는 이 저장소를 composite build로 연결합니다. `includeBuild` 경로는 소비 프로젝트의 `settings.gradle.kts`를 기준으로 실제 OTD 저장소 위치에 맞게 조정해야 합니다.
+
+```kotlin
+// settings.gradle.kts
+pluginManagement {
+    includeBuild("<path-to-otd>/gradle-plugin")
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+```
+
+Spring Boot 3와 Spring MVC를 사용하는 프로젝트의 Kotlin DSL 설정 예시:
+
+```kotlin
+// build.gradle.kts
+plugins {
+    java
+    id("org.springframework.boot") version "3.5.16"
+    id("org.springdoc.openapi-gradle-plugin") version "1.9.0"
+    id("io.github.dungsil-ai.openapi-to-document")
+}
+
+dependencies {
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:2.8.17")
+}
+
+openApi {
+    outputDir.set(layout.buildDirectory.dir("openapi"))
+    outputFileName.set("openapi.json")
+    waitTimeInSeconds.set(30)
+
+    customBootRun {
+        args.set(listOf("--spring.profiles.active=openapi"))
+    }
+}
+
+openApiDocument {
+    outputDirectory.set(layout.buildDirectory.dir("api-specification"))
+    outputFileName.set("service-api.xlsx")
+}
+```
+
+WebFlux 프로젝트에서는 MVC 의존성 대신 다음 의존성을 사용합니다.
+
+```kotlin
+implementation("org.springdoc:springdoc-openapi-starter-webflux-api:2.8.17")
+```
+
+실행:
+
+```bash
+./gradlew generateApiDocument
+```
+
+기본 출력은 `<buildDirectory>/api-document/<OpenAPI 파일명>.xlsx`이며, Gradle 기본 설정에서는 `build/api-document/<OpenAPI 파일명>.xlsx`입니다. `openApiDocument.outputFileName`은 입력이 하나일 때만 지정할 수 있습니다. Springdoc의 `groupedApiMappings`를 사용하면 각 매핑의 출력 파일명에 대응하는 XLSX를 각각 생성합니다.
+
+지원하는 자동 다운로드 대상은 Linux x64/ARM64, macOS x64/ARM64, Windows x64입니다. 사내 미러나 직접 설치한 실행 파일을 사용하려면 다음 속성을 설정합니다.
+
+직접 설치한 실행 파일:
+
+```kotlin
+openApiDocument {
+    executable.set(file("/opt/otd/bin/otd"))
+}
+```
+
+GitHub Releases와 같은 `<base>/v<version>/<asset>` 구조의 사내 미러:
+
+```kotlin
+openApiDocument {
+    downloadBaseUrl.set("https://artifacts.example.com/otd")
+    otdVersion.set("1.0.0")
+}
+```
+
+`openApiDocument.openApiFiles`에 파일을 직접 추가하면 Springdoc 없이도 같은 변환 태스크를 사용할 수 있습니다.
+
 ## 출력 파일 구성
 
 생성된 XLSX 파일은 다음 시트로 구성됩니다.
@@ -98,6 +185,7 @@ otd spec.yaml -o ./docs/ --force
 
 - Bun
 - TypeScript
+- Java 17 이상(Gradle 플러그인 개발)
 
 ### 시작하기
 
@@ -118,11 +206,13 @@ bun run dev -- openapi.yaml
 | `bun run typecheck` | TypeScript 타입 검사를 실행합니다. |
 | `bun run build` | Node 대상 CLI 번들과 정적 웹 변환기 파일(`dist/index.html`, `dist/openapi-to-document.js`)을 빌드합니다. |
 | `bun run build:exe` | OS별 실행 파일을 `dist/exe/`에 빌드합니다. |
+| `gradle-plugin/gradlew -p gradle-plugin check` | Gradle 플러그인 단위/기능 테스트와 플러그인 검증을 실행합니다. |
 | `bun run format` | Biome으로 코드를 포맷합니다. |
 
 ## 프로젝트 구조
 
 ```text
+gradle-plugin/                   # Springdoc 연동 Gradle 플러그인
 src/
 ├── index.ts                 # CLI 진입점
 ├── cli/                     # CLI 인자, 도움말, 버전 처리
