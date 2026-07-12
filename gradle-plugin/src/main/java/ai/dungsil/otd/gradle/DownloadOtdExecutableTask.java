@@ -36,7 +36,10 @@ public abstract class DownloadOtdExecutableTask extends DefaultTask {
             new ConcurrentHashMap<>();
 
     /** 다운로드 태스크 생성 */
-    public DownloadOtdExecutableTask() {}
+    public DownloadOtdExecutableTask() {
+        getOutputs().upToDateWhen(ignored -> isWindows(System.getProperty("os.name", ""))
+                || Files.isExecutable(getDestinationFile().get().getAsFile().toPath()));
+    }
 
     /**
      * 릴리스 자산 URL
@@ -188,12 +191,15 @@ public abstract class DownloadOtdExecutableTask extends DefaultTask {
     }
 
     private static void markExecutable(Path executable) {
-        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (osName.contains("win")) {
+        if (isWindows(System.getProperty("os.name", ""))) {
             return;
         }
         if (!executable.toFile().setExecutable(true, false) && !Files.isExecutable(executable)) {
             throw new GradleException("Unable to mark the OTD download as executable: " + executable);
         }
+    }
+
+    static boolean isWindows(String osName) {
+        return osName.toLowerCase(Locale.ROOT).startsWith("windows");
     }
 }

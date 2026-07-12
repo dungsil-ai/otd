@@ -109,11 +109,68 @@ class GenerateApiDocumentFunctionalTest {
         assertTrue(Files.readString(document).contains("\"title\":\"service\""));
     }
 
+    @DisplayName("OpenAPI 참조 키가 있으면 외부 참조 변경 후 다시 변환한다")
+    @Test
+    void shouldBeRegeneratedWhenReferencedOpenApiFileChanges() throws Exception {
+        writeFixture();
+        Files.writeString(
+                projectDirectory.resolve("openapi.json"),
+                "{\"openapi\":\"3.0.3\",\"components\":{\"schemas\":{\"User\":{\"$ref\":\"user.json\"}}}}",
+                StandardCharsets.UTF_8);
+        Path referencedFile = Files.writeString(
+                projectDirectory.resolve("user.json"),
+                "{\"type\":\"object\"}",
+                StandardCharsets.UTF_8);
+
+        BuildResult first = run("generateApiDocument", "--stacktrace");
+        assertEquals(SUCCESS, first.task(":generateApiDocument").getOutcome());
+
+        Files.writeString(
+                referencedFile,
+                "{\"type\":\"object\",\"required\":[\"id\"]}",
+                StandardCharsets.UTF_8);
+        BuildResult second = run("generateApiDocument", "--stacktrace");
+
+        assertEquals(SUCCESS, second.task(":generateApiDocument").getOutcome());
+    }
+
+    @DisplayName("설정에서 제거한 OpenAPI 입력의 기존 문서를 삭제한다")
+    @Test
+    void shouldBeRemovedObsoleteDocumentWhenInputIsNoLongerConfigured() throws Exception {
+        writeFixture();
+        Files.writeString(
+                projectDirectory.resolve("admin.json"),
+                "{\"openapi\":\"3.0.3\"}",
+                StandardCharsets.UTF_8);
+        Path buildFile = projectDirectory.resolve("build.gradle");
+        String multipleInputs = Files.readString(buildFile, StandardCharsets.UTF_8)
+                .replace(
+                        "openApiFiles.from(file('openapi.json'))",
+                        "openApiFiles.from(file('openapi.json'), file('admin.json'))")
+                .replace("outputFileName.set('service-contract')", "");
+        Files.writeString(buildFile, multipleInputs, StandardCharsets.UTF_8);
+
+        BuildResult first = run("generateApiDocument", "--stacktrace");
+        assertEquals(SUCCESS, first.task(":generateApiDocument").getOutcome());
+        Path obsoleteDocument = projectDirectory.resolve("build/specification/admin.xlsx");
+        assertTrue(Files.isRegularFile(obsoleteDocument));
+
+        Files.writeString(
+                buildFile,
+                multipleInputs.replace(
+                        "file('openapi.json'), file('admin.json')", "file('openapi.json')"),
+                StandardCharsets.UTF_8);
+        BuildResult second = run("generateApiDocument", "--stacktrace");
+
+        assertEquals(SUCCESS, second.task(":generateApiDocument").getOutcome());
+        assertFalse(Files.exists(obsoleteDocument));
+    }
+
     @DisplayName("다운로드 출처가 바뀌면 관리 실행 파일을 갱신한다")
     @Test
     void shouldRefreshManagedExecutableWhenDownloadSourceChanges() throws Exception {
-        AtomicReference<byte[]> payload = new AtomicReference<>(
-                "fake-otd-executable".getBytes(StandardCharsets.UTF_8));
+        byte[] initialPayload = "fake-otd-executable".getBytes(StandardCharsets.UTF_8);
+        AtomicReference<byte[]> payload = new AtomicReference<>(initialPayload);
         AtomicReference<String> requestedPath = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
@@ -145,6 +202,7 @@ class GenerateApiDocumentFunctionalTest {
                     openApiDocument {
                         openApiFiles.from(file('openapi.json'))
                         downloadBaseUrl.set('%s')
+                        otdVersion.set('test-version')
                     }
                     """
                     .formatted(baseUrl);
@@ -159,10 +217,22 @@ class GenerateApiDocumentFunctionalTest {
             BuildResult result = run(testKitDirectory, "downloadOtdExecutable", "--stacktrace");
 
             assertEquals(SUCCESS, result.task(":downloadOtdExecutable").getOutcome());
-            assertEquals("/v1.0.0/" + assetName, requestedPath.get());
-            Path downloadedExecutable = testKitDirectory.resolve(
-                    "caches/openapi-to-document/1.0.0/" + assetName);
-            assertArrayEquals(payload.get(), Files.readAllBytes(downloadedExecutable));
+            assertEquals("/vtest-version/" + assetName, requestedPath.get());
+            List<Path> initialDownloads =
+                    downloadedExecutables(testKitDirectory, "test-version", assetName);
+            assertEquals(1, initialDownloads.size());
+            Path downloadedExecutable = initialDownloads.get(0);
+            assertArrayEquals(initialPayload, Files.readAllBytes(downloadedExecutable));
+
+            if (!isWindows()) {
+                assertTrue(downloadedExecutable.toFile().setExecutable(false, false));
+
+                BuildResult repaired =
+                        run(testKitDirectory, "downloadOtdExecutable", "--stacktrace");
+
+                assertEquals(SUCCESS, repaired.task(":downloadOtdExecutable").getOutcome());
+                assertTrue(Files.isExecutable(downloadedExecutable));
+            }
 
             byte[] mirroredPayload = "mirrored-otd-executable".getBytes(StandardCharsets.UTF_8);
             payload.set(mirroredPayload);
@@ -174,8 +244,18 @@ class GenerateApiDocumentFunctionalTest {
             BuildResult refreshed = run(testKitDirectory, "downloadOtdExecutable", "--stacktrace");
 
             assertEquals(SUCCESS, refreshed.task(":downloadOtdExecutable").getOutcome());
-            assertEquals("/mirror/v1.0.0/" + assetName, requestedPath.get());
-            assertArrayEquals(mirroredPayload, Files.readAllBytes(downloadedExecutable));
+            assertEquals("/mirror/vtest-version/" + assetName, requestedPath.get());
+            List<Path> refreshedDownloads =
+                    downloadedExecutables(testKitDirectory, "test-version", assetName);
+            assertEquals(2, refreshedDownloads.size());
+            assertArrayEquals(initialPayload, Files.readAllBytes(downloadedExecutable));
+            assertTrue(refreshedDownloads.stream().anyMatch(path -> {
+                try {
+                    return java.util.Arrays.equals(mirroredPayload, Files.readAllBytes(path));
+                } catch (IOException error) {
+                    throw new java.io.UncheckedIOException(error);
+                }
+            }));
         } finally {
             server.stop(0);
         }
@@ -327,6 +407,17 @@ class GenerateApiDocumentFunctionalTest {
                 projectDirectory.resolve("build.gradle"), buildScript, StandardCharsets.UTF_8);
     }
 
+    private static List<Path> downloadedExecutables(
+            Path testKitDirectory, String version, String assetName) throws IOException {
+        Path versionDirectory = testKitDirectory.resolve("caches/openapi-to-document").resolve(version);
+        try (var paths = Files.walk(versionDirectory)) {
+            return paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().equals(assetName))
+                    .sorted()
+                    .toList();
+        }
+    }
+
     private static String groovyPath(Path path) {
         return path.toAbsolutePath()
                 .normalize()
@@ -336,6 +427,6 @@ class GenerateApiDocumentFunctionalTest {
     }
 
     private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase().contains("win");
+        return DownloadOtdExecutableTask.isWindows(System.getProperty("os.name", ""));
     }
 }

@@ -13,13 +13,13 @@
 Windows PowerShell 또는 명령 프롬프트에서는 다음 명령을 사용합니다.
 
 ```text
-gradle-plugin\gradlew.bat -p gradle-plugin\samples\spring-boot-webmvc generateApiDocument
+.\gradle-plugin\gradlew.bat -p gradle-plugin\samples\spring-boot-webmvc generateApiDocument
 ```
 
 실행 결과:
 
-- `spring-boot-webmvc/build/openapi/openapi.json`: Springdoc이 생성한 OpenAPI 문서
-- `spring-boot-webmvc/build/api-specification/sample-api.xlsx`: OTD가 변환한 XLSX 명세서
+- `gradle-plugin/samples/spring-boot-webmvc/build/openapi/openapi.json`: Springdoc이 생성한 OpenAPI 문서
+- `gradle-plugin/samples/spring-boot-webmvc/build/api-specification/sample-api.xlsx`: OTD가 변환한 XLSX 명세서
 
 `generateApiDocument`는 `generateOpenApiDocs`를 자동으로 선행 실행합니다. OpenAPI 생성까지만 확인하려면 `generateOpenApiDocs` 태스크를 직접 실행할 수 있습니다.
 

@@ -1,6 +1,7 @@
 package ai.dungsil.otd.gradle;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,6 +21,14 @@ class HostPlatformTest {
         assertEquals("otd-linux-arm64", HostPlatform.detect("Linux", "aarch64").assetName());
         assertEquals("otd-darwin-x64", HostPlatform.detect("Mac OS X", "x86_64").assetName());
         assertEquals("otd-darwin-arm64", HostPlatform.detect("Darwin", "arm64").assetName());
+    }
+
+    @DisplayName("Darwin을 실행 권한 처리가 필요 없는 Windows로 분류하지 않는다")
+    @Test
+    void shouldNotBeTreatedDarwinAsWindowsForExecutablePermissions() {
+        assertAll(
+                () -> assertTrue(DownloadOtdExecutableTask.isWindows("Windows 11")),
+                () -> assertFalse(DownloadOtdExecutableTask.isWindows("Darwin")));
     }
 
     @DisplayName("지원하지 않는 Windows ARM64를 거부한다")

@@ -1,8 +1,11 @@
 package ai.dungsil.otd.gradle;
 
 import java.io.File;
-
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
+import java.util.HexFormat;
 import java.util.Set;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -41,14 +44,14 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
         Provider<String> downloadUrl = extension.getDownloadBaseUrl()
                 .zip(extension.getOtdVersion(), OpenApiToDocumentPlugin::versionedReleaseUrl)
                 .zip(assetName, (releaseUrl, asset) -> releaseUrl + "/" + asset);
-        Provider<File> cachedExecutableFile = extension.getOtdVersion().zip(
+        Provider<String> cacheDirectory = extension.getOtdVersion().zip(
+                downloadUrl,
+                (version, source) -> cacheSegment(version) + "/" + sourceSegment(source));
+        Provider<File> cachedExecutableFile = cacheDirectory.zip(
                 assetName,
-                (version, asset) -> new File(
+                (directory, asset) -> new File(
                         project.getGradle().getGradleUserHomeDir(),
-                        "caches/openapi-to-document/"
-                                + cacheSegment(version)
-                                + "/"
-                                + asset));
+                        "caches/openapi-to-document/" + directory + "/" + asset));
         Provider<RegularFile> cachedExecutable = project.getLayout().file(cachedExecutableFile);
 
         TaskProvider<DownloadOtdExecutableTask> downloadTask = project.getTasks().register(
@@ -89,7 +92,7 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
             OpenApiDocumentExtension extension,
             TaskProvider<GenerateApiDocumentTask> generateTask) {
         Object springdoc = project.getExtensions().getByName(SPRINGDOC_EXTENSION_NAME);
-        Provider<Set<File>> outputs = SpringdocOutputFiles.from(springdoc);
+        Provider<Set<File>> outputs = SpringdocOutputFiles.from(project, springdoc);
         TaskProvider<Task> springdocTask = project.getTasks().named(SPRINGDOC_TASK_NAME);
 
         extension.getOpenApiFiles().from(outputs);
@@ -109,5 +112,15 @@ public final class OpenApiToDocumentPlugin implements Plugin<Project> {
 
     private static String cacheSegment(String version) {
         return version.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    private static String sourceSegment(String source) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(source.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 is unavailable", error);
+        }
     }
 }

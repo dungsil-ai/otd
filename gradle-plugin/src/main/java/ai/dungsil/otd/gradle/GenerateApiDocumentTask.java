@@ -2,15 +2,21 @@ package ai.dungsil.otd.gradle;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.InvalidPathException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import org.gradle.api.DefaultTask;
@@ -26,6 +32,7 @@ import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFiles;
+import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
@@ -35,6 +42,7 @@ import org.gradle.work.DisableCachingByDefault;
 /** OpenAPI 입력을 XLSX 명세서로 변환하는 태스크 */
 @DisableCachingByDefault(because = "OTD embeds creation metadata in generated workbooks")
 public abstract class GenerateApiDocumentTask extends DefaultTask {
+    private static final String OUTPUT_MANIFEST_FILE_NAME = ".openapi-to-document.outputs";
     private final ExecOperations execOperations;
 
     /**
@@ -45,6 +53,7 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     @Inject
     public GenerateApiDocumentTask(ExecOperations execOperations) {
         this.execOperations = execOperations;
+        getOutputs().upToDateWhen(ignored -> openApiInputsHaveNoReferences());
     }
 
     /**
@@ -106,6 +115,19 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     }
 
     /**
+     * 이전 실행의 생성 문서 목록
+     *
+     * @return 태스크가 관리하는 출력 manifest 파일
+     */
+    @OutputFile
+    public File getOutputManifest() {
+        return getOutputDirectory()
+                .file(OUTPUT_MANIFEST_FILE_NAME)
+                .get()
+                .getAsFile();
+    }
+
+    /**
      * API 명세서 생성
      * <p>
      * 구성된 OpenAPI 입력마다 OTD를 한 번 실행한다. 기존 출력은 제거하며 실행 후 새 비어 있지
@@ -127,13 +149,20 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
             throw new GradleException("OTD executable is not a file: " + executable);
         }
 
-        Path outputDirectory = getOutputDirectory().get().getAsFile().toPath();
+        Path outputDirectory = getOutputDirectory()
+                .get()
+                .getAsFile()
+                .toPath()
+                .toAbsolutePath()
+                .normalize();
         try {
             java.nio.file.Files.createDirectories(outputDirectory);
         } catch (IOException error) {
             throw new GradleException("Unable to create output directory " + outputDirectory, error);
         }
 
+        Set<Path> currentOutputs = new LinkedHashSet<>(conversions.values());
+        deleteObsoleteOutputs(outputDirectory, currentOutputs);
         for (Map.Entry<Path, Path> conversion : conversions.entrySet()) {
             Path output = conversion.getValue();
             deleteExistingOutput(output);
@@ -147,6 +176,7 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
                 throw new GradleException("Unable to inspect generated document " + output, error);
             }
         }
+        writeOutputManifest(outputDirectory, currentOutputs);
     }
 
     private static void deleteExistingOutput(Path output) {
@@ -154,6 +184,77 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
             java.nio.file.Files.deleteIfExists(output);
         } catch (IOException error) {
             throw new GradleException("Unable to remove existing document " + output, error);
+        }
+    }
+
+    private boolean openApiInputsHaveNoReferences() {
+        for (File input : getOpenApiFiles().getFiles()) {
+            try {
+                if (java.nio.file.Files.readString(input.toPath(), StandardCharsets.UTF_8)
+                        .contains("$ref")) {
+                    return false;
+                }
+            } catch (IOException error) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void deleteObsoleteOutputs(Path outputDirectory, Set<Path> currentOutputs) {
+        Path manifest = outputDirectory.resolve(OUTPUT_MANIFEST_FILE_NAME);
+        if (!java.nio.file.Files.isRegularFile(manifest)) {
+            return;
+        }
+
+        try {
+            for (String encodedName : java.nio.file.Files.readAllLines(manifest, StandardCharsets.UTF_8)) {
+                String fileName = new String(
+                        Base64.getUrlDecoder().decode(encodedName), StandardCharsets.UTF_8);
+                Path previousOutput = outputDirectory.resolve(fileName).normalize();
+                if (!outputDirectory.equals(previousOutput.getParent())) {
+                    throw new GradleException("Invalid generated document manifest entry: " + fileName);
+                }
+                if (!currentOutputs.contains(previousOutput)) {
+                    java.nio.file.Files.deleteIfExists(previousOutput);
+                }
+            }
+        } catch (IOException | IllegalArgumentException error) {
+            throw new GradleException("Unable to reconcile generated documents in " + outputDirectory, error);
+        }
+    }
+
+    private static void writeOutputManifest(Path outputDirectory, Set<Path> currentOutputs) {
+        Path manifest = outputDirectory.resolve(OUTPUT_MANIFEST_FILE_NAME);
+        Path temporary = manifest.resolveSibling(
+                manifest.getFileName() + "." + UUID.randomUUID() + ".tmp");
+        List<String> entries = currentOutputs.stream()
+                .map(path -> path.getFileName().toString())
+                .sorted()
+                .map(name -> Base64.getUrlEncoder()
+                        .withoutPadding()
+                        .encodeToString(name.getBytes(StandardCharsets.UTF_8)))
+                .toList();
+
+        try {
+            java.nio.file.Files.write(temporary, entries, StandardCharsets.UTF_8);
+            try {
+                java.nio.file.Files.move(
+                        temporary,
+                        manifest,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                java.nio.file.Files.move(temporary, manifest, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException error) {
+            throw new GradleException("Unable to record generated documents in " + outputDirectory, error);
+        } finally {
+            try {
+                java.nio.file.Files.deleteIfExists(temporary);
+            } catch (IOException ignored) {
+                // 다음 실행에서 교체할 수 있으므로 임시 manifest를 유지한다.
+            }
         }
     }
 
