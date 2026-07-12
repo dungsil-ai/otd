@@ -29,7 +29,7 @@ import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.work.DisableCachingByDefault;
 
-/** 플랫폼별 OTD 실행 파일 다운로드 */
+/** 플랫폼별 OTD 실행 파일 다운로드 태스크 */
 @DisableCachingByDefault(because = "The executable is stored in the shared Gradle user home cache")
 public abstract class DownloadOtdExecutableTask extends DefaultTask {
     private static final ConcurrentMap<Path, ReentrantLock> PROCESS_LOCKS =
@@ -39,25 +39,27 @@ public abstract class DownloadOtdExecutableTask extends DefaultTask {
     public DownloadOtdExecutableTask() {}
 
     /**
-     * 릴리스 자산 URL 반환
+     * 릴리스 자산 URL
      *
-     * @return 실행 파일 다운로드 URL
+     * @return OTD 실행 파일 다운로드 URL
      */
     @Input
     public abstract Property<String> getDownloadUrl();
 
     /**
-     * 로컬 실행 파일 경로 반환
+     * 다운로드 대상 파일
      *
-     * @return 다운로드한 실행 파일
+     * @return Gradle 사용자 홈 캐시의 OTD 실행 파일
      */
     @OutputFile
     public abstract RegularFileProperty getDestinationFile();
 
     /**
-     * 캐시 출처 메타데이터 경로 반환
+     * 다운로드 출처 메타데이터 파일
+     * <p>
+     * 캐시된 실행 파일이 현재 다운로드 URL에서 생성되었는지 판별하는 데 사용한다.
      *
-     * @return 다운로드 출처 메타데이터 파일
+     * @return 다운로드 출처 URL을 저장하는 메타데이터 파일
      */
     @OutputFile
     public File getSourceMetadataFile() {
@@ -65,9 +67,10 @@ public abstract class DownloadOtdExecutableTask extends DefaultTask {
     }
 
     /**
-     * 실행 파일 다운로드
+     * OTD 실행 파일 다운로드
      * <p>
-     * 동일한 목적지의 병렬 다운로드를 직렬화하고 Unix 호스트에서 실행 권한을 설정한다.
+     * 동일한 대상의 프로세스 및 파일 시스템 간 병렬 다운로드를 직렬화한다. 캐시 출처가
+     * 일치하면 기존 파일을 사용하고 Unix 계열 호스트에서는 실행 권한을 설정한다.
      *
      * @throws GradleException 다운로드, 캐시 준비 또는 실행 권한 설정에 실패한 경우
      */

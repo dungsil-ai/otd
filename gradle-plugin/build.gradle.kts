@@ -17,6 +17,7 @@ repositories {
 }
 
 dependencies {
+    compileOnly("org.jspecify:jspecify:1.0.0")
     testImplementation("org.springdoc:springdoc-openapi-gradle-plugin:1.9.0")
     testImplementation(platform("org.junit:junit-bom:5.13.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")

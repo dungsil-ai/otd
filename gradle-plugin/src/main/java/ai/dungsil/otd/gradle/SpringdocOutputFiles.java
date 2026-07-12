@@ -9,15 +9,17 @@ import org.gradle.api.GradleException;
 import org.gradle.api.file.Directory;
 import org.gradle.api.provider.Provider;
 
-/** Springdoc 확장 설정에서 생성 OpenAPI 파일 조회 */
+/** Springdoc 설정 기반 OpenAPI 출력 파일 조회 */
 final class SpringdocOutputFiles {
     private SpringdocOutputFiles() {}
 
     /**
      * Springdoc 출력 파일 Provider 생성
+     * <p>
+     * 그룹 매핑이 있으면 각 그룹의 출력 파일을 사용하고, 없으면 단일 출력 파일을 사용한다.
      *
      * @param extension Springdoc OpenAPI 확장 객체
-     * @return 단일 또는 그룹 OpenAPI 출력 파일
+     * @return 단일 또는 그룹별 OpenAPI 출력 파일 Provider
      * @throws GradleException Springdoc 확장 API가 호환되지 않거나 출력 이름이 유효하지 않은 경우
      */
     static Provider<Set<File>> from(Object extension) {

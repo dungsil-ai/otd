@@ -11,7 +11,7 @@ import org.gradle.api.file.RegularFile;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskProvider;
 
-/** Springdoc OpenAPI 생성과 OTD XLSX 변환 연결 */
+/** Springdoc OpenAPI 생성과 OTD XLSX 변환을 연결하는 Gradle 플러그인 */
 public final class OpenApiToDocumentPlugin implements Plugin<Project> {
     static final String EXTENSION_NAME = "openApiDocument";
     static final String GENERATE_TASK_NAME = "generateApiDocument";

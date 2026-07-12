@@ -32,7 +32,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
 import org.gradle.work.DisableCachingByDefault;
 
-/** OpenAPI 입력을 XLSX API 명세서로 변환 */
+/** OpenAPI 입력을 XLSX 명세서로 변환하는 태스크 */
 @DisableCachingByDefault(because = "OTD embeds creation metadata in generated workbooks")
 public abstract class GenerateApiDocumentTask extends DefaultTask {
     private final ExecOperations execOperations;
@@ -48,34 +48,34 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     }
 
     /**
-     * OpenAPI JSON 또는 YAML 입력 파일 반환
+     * OpenAPI 입력 파일
      *
-     * @return OpenAPI 입력 파일
+     * @return 변환할 OpenAPI JSON 또는 YAML 파일 모음
      */
     @InputFiles
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getOpenApiFiles();
 
     /**
-     * 생성 문서 출력 디렉터리 반환
+     * 생성 문서 출력 디렉터리
      *
-     * @return 출력 디렉터리
+     * @return XLSX 문서 출력 디렉터리
      */
     @Internal
     public abstract DirectoryProperty getOutputDirectory();
 
     /**
-     * 단일 입력에 사용할 선택적 출력 파일명 반환
+     * 단일 입력의 출력 파일명
      *
-     * @return 선택적 출력 파일명
+     * @return 선택적 XLSX 출력 파일명
      */
     @Internal
     public abstract Property<String> getOutputFileName();
 
     /**
-     * 실행할 OTD 파일 반환
+     * OTD 실행 파일
      *
-     * @return OTD 실행 파일
+     * @return 변환에 사용할 OTD 실행 파일
      */
     @Optional
     @InputFile
@@ -83,17 +83,19 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     public abstract RegularFileProperty getOtdExecutable();
 
     /**
-     * OTD CLI 인수 앞에 삽입할 실행 인수 반환
+     * OTD 실행 접두 인수
      *
-     * @return 실행 접두 인수
+     * @return 실행 파일 경로 뒤에 삽입할 인수
      */
     @Input
     public abstract ListProperty<String> getExecutableArgs();
 
     /**
-     * 태스크가 생성할 XLSX 파일 반환
+     * 예상 생성 문서
+     * <p>
+     * 입력별 출력 파일명을 결정하고 중복 목적지와 잘못된 파일명을 검증한다.
      *
-     * @return 생성 문서
+     * @return 태스크가 생성할 XLSX 파일 집합
      * @throws GradleException 입력과 출력 파일명 조합이 유효하지 않은 경우
      */
     @OutputFiles
@@ -106,7 +108,8 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
     /**
      * API 명세서 생성
      * <p>
-     * 구성된 OpenAPI 입력마다 OTD를 한 번 실행하고 새 출력 파일 생성을 검증한다.
+     * 구성된 OpenAPI 입력마다 OTD를 한 번 실행한다. 기존 출력은 제거하며 실행 후 새 비어 있지
+     * 않은 파일이 생성되었는지 검증한다.
      *
      * @throws GradleException 입력, 실행 파일 또는 생성 결과가 유효하지 않은 경우
      */

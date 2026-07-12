@@ -10,11 +10,13 @@ record HostPlatform(String operatingSystem, String architecture, String assetNam
     }
 
     /**
-     * OS 및 아키텍처 이름 정규화
+     * 호스트 플랫폼 식별
+     * <p>
+     * JVM의 OS 및 아키텍처 이름을 배포 대상 이름으로 정규화한다.
      *
      * @param osName JVM의 OS 이름
      * @param osArch JVM의 아키텍처 이름
-     * @return 지원되는 호스트 플랫폼
+     * @return 지원되는 호스트 플랫폼과 릴리스 자산명
      * @throws GradleException 대응하는 릴리스 실행 파일이 없는 경우
      */
     static HostPlatform detect(String osName, String osArch) {
