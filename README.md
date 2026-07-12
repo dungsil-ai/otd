@@ -168,6 +168,8 @@ openApiDocument {
 
 `openApiDocument.openApiFiles`에 파일을 직접 추가하면 Springdoc 없이도 같은 변환 태스크를 사용할 수 있습니다.
 
+실행 가능한 Spring Boot MVC 예제와 로컬 composite build 실행 방법은 [`gradle-plugin/samples`](gradle-plugin/samples/README.md)에서 확인할 수 있습니다.
+
 ## 출력 파일 구성
 
 생성된 XLSX 파일은 다음 시트로 구성됩니다.
