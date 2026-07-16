@@ -6,6 +6,7 @@ import {
   getFileNameWithoutExt,
   isFileContentType,
   resolveOutputPath,
+  sanitizeSheetName,
 } from "../../src/utils/common";
 
 describe("resolveOutputPath", () => {
@@ -120,5 +121,40 @@ describe("formatSampleTitle", () => {
 
   it("이름이 default이면 기본 제목을 반환해야 한다", () => {
     expect(formatSampleTitle("요청 예시", { name: "default", value: "{}" })).toBe("요청 예시");
+  });
+});
+
+describe("sanitizeSheetName", () => {
+  it("금지 문자를 공백으로 치환해야 한다", () => {
+    expect(sanitizeSheetName("users:*?/\\[]admin", new Set())).toBe("users admin");
+  });
+
+  it("앞뒤 작은따옴표를 제거해야 한다", () => {
+    expect(sanitizeSheetName("''Users API''", new Set())).toBe("Users API");
+  });
+
+  it("31자를 초과하는 이름을 잘라야 한다", () => {
+    expect(sanitizeSheetName("a".repeat(32), new Set())).toBe("a".repeat(31));
+  });
+
+  it("중복 이름에 번호 접미사를 붙여야 한다", () => {
+    const usedNames = new Set(["Users API".toLowerCase()]);
+    expect(sanitizeSheetName("Users API", usedNames)).toBe("Users API (2)");
+  });
+
+  it("31자가 같은 접두사를 가진 이름의 충돌을 구분해야 한다", () => {
+    const prefix = "a".repeat(31);
+    const usedNames = new Set<string>();
+    expect(sanitizeSheetName(`${prefix}A`, usedNames)).toBe(prefix);
+    expect(sanitizeSheetName(`${prefix}B`, usedNames)).toBe(`${"a".repeat(27)} (2)`);
+  });
+
+  it("빈 이름에 기본 이름을 사용해야 한다", () => {
+    expect(sanitizeSheetName("   ", new Set())).toBe("Untitled");
+  });
+
+  it("대소문자와 관계없이 중복을 감지해야 한다", () => {
+    const usedNames = new Set(["users api"]);
+    expect(sanitizeSheetName("Users API", usedNames)).toBe("Users API (2)");
   });
 });

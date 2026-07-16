@@ -18,6 +18,14 @@ tags:
     description: 유니코드 테스트
   - name: complex-schema
     description: 복잡한 스키마 테스트
+  - name: "users:admin"
+    description: "콜론 포함 태그"
+  - name: "users/admin"
+    description: "슬래시 포함 태그"
+  - name: "VeryLongTagNameThirtyCharsAAAA"
+    description: "중복 시트명 충돌 테스트 A"
+  - name: "VeryLongTagNameThirtyCharsBBBB"
+    description: "중복 시트명 충돌 테스트 B"
 
 components:
   securitySchemes:
@@ -577,3 +585,22 @@ paths:
             text/plain:
               schema:
                 type: string
+
+  /sheet-names:
+    get:
+      tags: ["users:admin"]
+      summary: "콜론 포함 태그"
+      responses: { "200": { description: "OK" } }
+    post:
+      tags: ["users/admin"]
+      summary: "슬래시 포함 태그"
+      responses: { "200": { description: "OK" } }
+  /sheet-names-duplicate:
+    get:
+      tags: ["VeryLongTagNameThirtyCharsAAAA"]
+      summary: "31자 태그 A"
+      responses: { "200": { description: "OK" } }
+    post:
+      tags: ["VeryLongTagNameThirtyCharsBBBB"]
+      summary: "31자 태그 B"
+      responses: { "200": { description: "OK" } }

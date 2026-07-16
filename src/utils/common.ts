@@ -51,3 +51,26 @@ export const PARAMETER_TYPE_LABELS: Record<string, string> = {
   cookie: "요청 쿠키",
 };
 export const PARAMETER_TYPE_ORDER: string[] = ["path", "query", "header", "cookie"];
+
+const SHEET_NAME_FORBIDDEN = /[*?:/\\[\]]/g;
+const MAX_SHEET_NAME_LENGTH = 31;
+
+export function sanitizeSheetName(rawName: string, usedNames: Set<string>): string {
+  let name = rawName
+    .replace(SHEET_NAME_FORBIDDEN, " ")
+    .replace(/^'+|'+$/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (name.length === 0) name = "Untitled";
+  name = name.substring(0, MAX_SHEET_NAME_LENGTH);
+  let candidate = name;
+  let suffix = 2;
+  while (usedNames.has(candidate.toLowerCase())) {
+    const suffixStr = ` (${suffix})`;
+    candidate = `${name.substring(0, MAX_SHEET_NAME_LENGTH - suffixStr.length)}${suffixStr}`;
+    suffix++;
+    if (suffix > 99) break;
+  }
+  usedNames.add(candidate.toLowerCase());
+  return candidate;
+}

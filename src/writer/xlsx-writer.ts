@@ -23,6 +23,7 @@ import {
   PARAMETER_TYPE_LABELS,
   PARAMETER_TYPE_ORDER,
   resolveOutputPath,
+  sanitizeSheetName,
 } from "../utils/common";
 
 // ============================================================================
@@ -423,13 +424,16 @@ function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
   }
 
   // 각 태그별로 시트 생성
+  const usedNames = new Set<string>();
+  for (const ws of workbook.worksheets) {
+    usedNames.add(ws.name.toLowerCase());
+  }
   for (const [tagName, endpoints] of tagGroups) {
-    // description이 있으면 사용, 없으면 tag name 사용
-    const displayName = tagDescriptions.get(tagName) ?? tagName;
-    // 이미 "API"로 끝나면 접미사 생략
-    const sheetName = displayName.toUpperCase().endsWith("API")
-      ? displayName.substring(0, 31)
-      : `${displayName} API`.substring(0, 31);
+    const rawDisplayName = tagDescriptions.get(tagName) ?? tagName;
+    const displayName = rawDisplayName.toUpperCase().endsWith("API")
+      ? rawDisplayName
+      : `${rawDisplayName} API`;
+    const sheetName = sanitizeSheetName(displayName, usedNames);
     const sheet = workbook.addWorksheet(sheetName);
 
     // 열 너비 설정

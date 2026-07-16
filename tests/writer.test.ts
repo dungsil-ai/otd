@@ -93,4 +93,40 @@ describe("XLSX Writer", () => {
       await expect(writeXlsx(xlsxData, optionsNoForce)).rejects.toThrow();
     });
   });
+  describe("createTagSheets with sanitization", () => {
+    it("금지 문자가 포함된 태그명을 정리하고 중복을 구분해야 한다", async () => {
+      const doc = (await parseOpenApi("tests/fixtures/edge-cases.yaml")) as OpenAPIV3.Document;
+      const data = extractEndpoints(doc);
+      data.tags = data.tags.map((tag) =>
+        tag.name === "users:admin" || tag.name === "users/admin" ? { name: tag.name } : tag
+      );
+
+      const workbook = createWorkbook(data);
+      const sheetNames = workbook.worksheets.map((worksheet) => worksheet.name);
+
+      expect(sheetNames).toContain("users admin API");
+      expect(sheetNames).toContain("users admin API (2)");
+    });
+
+    it("31자가 같은 접두사의 시트명을 번호 접미사로 구분해야 한다", async () => {
+      const doc = (await parseOpenApi("tests/fixtures/edge-cases.yaml")) as OpenAPIV3.Document;
+      const data = extractEndpoints(doc);
+      const prefix = "A".repeat(31);
+      data.tags = data.tags.map((tag) => {
+        if (tag.name === "VeryLongTagNameThirtyCharsAAAA") {
+          return { ...tag, description: `${prefix}A` };
+        }
+        if (tag.name === "VeryLongTagNameThirtyCharsBBBB") {
+          return { ...tag, description: `${prefix}B` };
+        }
+        return tag;
+      });
+
+      const workbook = createWorkbook(data);
+      const sheetNames = workbook.worksheets.map((worksheet) => worksheet.name);
+
+      expect(sheetNames).toContain(prefix);
+      expect(sheetNames).toContain(`${"A".repeat(27)} (2)`);
+    });
+  });
 });
