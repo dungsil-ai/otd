@@ -221,18 +221,43 @@ describe("GitHub Actions workflows", () => {
     expect(content).toContain("./gradle-plugin/gradlew -p gradle-plugin check");
   });
 
-  it("pages workflow should deploy static site to the gh-pages branch", () => {
-    const content = readFileSync(join(process.cwd(), ".github/workflows/pages.yml"), "utf8");
+  it("pages workflow should deploy only the successful Build and Test artifact", () => {
+    const pagesContent = readFileSync(join(process.cwd(), ".github/workflows/pages.yml"), "utf8");
+    const ciContent = readFileSync(join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
 
-    expect(content).toContain("uses: actions/upload-artifact@v4");
-    expect(content).toContain("uses: actions/download-artifact@v4");
-    expect(content).toContain("Deploy Pages to gh-pages");
-    expect(content).toContain("contents: write");
-    expect(content).toContain("git fetch --depth=1 origin gh-pages");
-    expect(content).toContain("git push origin HEAD:gh-pages");
-    expect(content).toContain("! -name preview ! -name CNAME");
-    expect(content).not.toContain("actions/deploy-pages");
-    expect(content).not.toContain("actions/upload-pages-artifact");
+    expect(pagesContent).toContain("workflow_run:");
+    expect(pagesContent).toContain("workflows: [Build and Test]");
+    expect(pagesContent).toContain("types: [completed]");
+    expect(pagesContent).toContain("branches: [main]");
+    expect(pagesContent).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(pagesContent).toContain("github.event.workflow_run.event == 'push'");
+    expect(pagesContent).not.toContain("workflow_dispatch:");
+    expect(pagesContent).not.toContain("\n  push:\n");
+    expect(pagesContent).toContain("uses: actions/download-artifact@v4");
+    expect(pagesContent).toContain("github-token: $" + "{{ secrets.GITHUB_TOKEN }}");
+    expect(pagesContent).toContain("run-id: $" + "{{ github.event.workflow_run.id }}");
+    expect(pagesContent).toContain("name: dist");
+    expect(ciContent).toContain(
+      "if: github.event_name == 'push' && github.ref == 'refs/heads/main'"
+    );
+    expect(ciContent).toContain("name: dist");
+    expect(pagesContent).toContain("Deploy Pages to gh-pages");
+    expect(pagesContent).toContain("actions: read");
+    expect(pagesContent).toContain("contents: write");
+    expect(pagesContent).toContain("git fetch --depth=1 origin gh-pages");
+    expect(pagesContent).toContain("git push origin HEAD:gh-pages");
+    expect(pagesContent).toContain("! -name preview ! -name CNAME");
+    expect(pagesContent).not.toContain("actions/deploy-pages");
+    expect(pagesContent).not.toContain("actions/upload-pages-artifact");
+  });
+
+  it("preview workflow should deploy without waiting for Build and Test", () => {
+    const content = readFileSync(join(process.cwd(), ".github/workflows/preview.yml"), "utf8");
+
+    expect(content).toContain("pull_request:");
+    expect(content).toContain("- '.github/workflows/preview.yml'");
+    expect(content).not.toContain("workflow_run:");
+    expect(content).not.toContain("workflows: [Build and Test]");
   });
 
   it("release and nightly workflows should inject the build date automatically", () => {

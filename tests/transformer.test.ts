@@ -313,3 +313,117 @@ describe("Endpoint Extractor", () => {
     });
   });
 });
+
+function buildOverrideDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Parameter Override API", version: "1.0.0" },
+    paths: {
+      "/orders/{id}": {
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            description: "path-level",
+            schema: { type: "string" },
+          },
+          {
+            name: "filter",
+            in: "query",
+            description: "path-level-only",
+            schema: { type: "string" },
+          },
+        ],
+        get: {
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "operation-level",
+              schema: { type: "integer", format: "int64" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              description: "operation-only",
+              schema: { type: "integer", format: "int32" },
+            },
+          ],
+          responses: { "200": { description: "OK" } },
+        },
+      },
+    },
+  };
+}
+
+describe("Parameter override", () => {
+  it("operation-level 파라미터가 path-level 파라미터를 대체해야 한다", () => {
+    const endpoint = extractEndpoints(buildOverrideDoc()).endpoints[0];
+    const idParams = endpoint?.parameters.filter(
+      (parameter) => parameter.name === "id" && parameter.in === "path"
+    );
+
+    expect(idParams).toHaveLength(1);
+    expect(idParams?.[0]).toMatchObject({
+      type: "integer",
+      format: "int64",
+      description: "operation-level",
+    });
+  });
+
+  it("path-level에만 있는 파라미터를 보존해야 한다", () => {
+    const endpoint = extractEndpoints(buildOverrideDoc()).endpoints[0];
+    const filter = endpoint?.parameters.find((parameter) => parameter.name === "filter");
+
+    expect(filter).toMatchObject({
+      in: "query",
+      type: "string",
+      description: "path-level-only",
+    });
+  });
+
+  it("operation-level에만 있는 파라미터를 정상 추출해야 한다", () => {
+    const endpoint = extractEndpoints(buildOverrideDoc()).endpoints[0];
+    const limit = endpoint?.parameters.find((parameter) => parameter.name === "limit");
+
+    expect(limit).toMatchObject({
+      in: "query",
+      type: "integer",
+      format: "int32",
+      description: "operation-only",
+    });
+  });
+});
+
+function buildMultiTagDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Multi-tag API", version: "1.0.0" },
+    paths: {
+      "/multi-tag": {
+        get: {
+          tags: ["users", "admin"],
+          responses: { "200": { description: "성공" } },
+        },
+        post: {
+          tags: ["users", "admin", "products"],
+          responses: { "201": { description: "생성됨" } },
+        },
+      },
+    },
+  };
+}
+
+describe("Multi-tag endpoints", () => {
+  it("엔드포인트의 모든 태그를 보존해야 한다", () => {
+    const endpoint = extractEndpoints(buildMultiTagDoc()).endpoints.find(
+      ({ method, path }) => method === "GET" && path === "/multi-tag"
+    );
+
+    expect(endpoint?.tags).toHaveLength(2);
+    expect(endpoint?.tags).toContain("users");
+    expect(endpoint?.tags).toContain("admin");
+  });
+});

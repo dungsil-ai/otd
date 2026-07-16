@@ -1,0 +1,18 @@
+openapi: "3.0.0"
+info:
+  title: "Common Schemas"
+  version: "1.0.0"
+components:
+  schemas:
+    UserList:
+      type: array
+      items:
+        $ref: "#/components/schemas/User"
+    User:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string

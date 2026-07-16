@@ -4,7 +4,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 import ExcelJS from "exceljs";
@@ -46,7 +46,7 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: "edge-cases.yaml",
-    expectedEndpoints: 22,
+    expectedEndpoints: 26,
     shouldError: false,
     expectedTitle: "Edge Cases API",
     expectedFirstEndpoint: { method: "GET", path: "/" },
@@ -80,6 +80,7 @@ const FIXTURES: Fixture[] = [
 ];
 
 describe("Static HTML Converter E2E", () => {
+  const testOutputs: string[] = [];
   let browser: Browser;
   let server: ReturnType<typeof Bun.serve>;
   let baseUrl: string;
@@ -110,6 +111,9 @@ describe("Static HTML Converter E2E", () => {
   afterAll(async () => {
     await browser.close();
     server.stop();
+    testOutputs.forEach((path) => {
+      if (existsSync(path)) unlinkSync(path);
+    });
   });
 
   for (const fixture of FIXTURES) {
@@ -364,6 +368,39 @@ describe("Static HTML Converter E2E", () => {
     }
   }, 60_000);
 
+  it("URL로 불러온 문서의 상대 $ref를 해석하여 미리 보기와 XLSX를 생성해야 한다", async () => {
+    const context = await browser.newContext({ acceptDownloads: true });
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceUrl", `${baseUrl}/fixtures/ref-main.yaml`);
+      await page.click("#loadUrlBtn");
+
+      await expectPreviewPath(page, "/users");
+
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 60_000 }),
+        page.click("#convertBtn"),
+      ]);
+      expect(download.suggestedFilename()).toBe("ref-main.xlsx");
+
+      const filePath = "tests/fixtures/e2e-relative-ref-output.xlsx";
+      await download.saveAs(filePath);
+      testOutputs.push(filePath);
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(filePath);
+      const overviewSheet = workbook.getWorksheet("개요");
+      expect(overviewSheet).toBeDefined();
+      if (overviewSheet) {
+        expect(overviewSheet.getCell("C3").value).toBe("Relative Ref Test API");
+      }
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
   it("파일 업로드 후 미리 보기와 개행 렌더링을 갱신해야 한다", async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -391,6 +428,29 @@ describe("Static HTML Converter E2E", () => {
 
       expect(overviewDescriptionStyle?.text).toBe(multilineDescription);
       expect(overviewDescriptionStyle?.whiteSpace).toContain("pre");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+  // 주의: Windows에서는 Playwright chromium.launch가 실패할 수 있다.
+  it("다중 태그 엔드포인트의 모든 태그 탭을 표시해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceText", buildMultiTagOpenApi());
+      await page.click("#convertBtn");
+      await expectPreviewPath(page, "/multi-tag");
+
+      const tabLabels = await page.evaluate(() =>
+        Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+          (tab) => tab.textContent?.trim() ?? ""
+        )
+      );
+      expect(tabLabels).toContain("users API");
+      expect(tabLabels).toContain("admin API");
+      expect(tabLabels).toContain("products API");
     } finally {
       await context.close();
     }
@@ -447,6 +507,21 @@ function buildTaggedOpenApi(tagCount: number): string {
     },
     tags,
     paths,
+  });
+}
+
+function buildMultiTagOpenApi(): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: { title: "Multi-tag API", version: "1.0.0" },
+    paths: {
+      "/multi-tag": {
+        get: {
+          tags: ["users", "admin", "products"],
+          responses: { "200": { description: "성공" } },
+        },
+      },
+    },
   });
 }
 

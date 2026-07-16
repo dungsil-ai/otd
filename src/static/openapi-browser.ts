@@ -6,6 +6,7 @@ import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
 import type { XlsxData } from "../models/types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
+import { getFileNameWithoutExt } from "../utils/common";
 import { createWorkbook } from "../writer/xlsx-writer";
 import { renderPreview } from "./openapi-preview";
 
@@ -13,6 +14,7 @@ type UiState = {
   previewRequestId: number;
   previewTimer: ReturnType<typeof setTimeout> | null;
   sourceName: string;
+  sourceUrl: string | null;
 };
 
 const PREVIEW_DEBOUNCE_MS = 300;
@@ -21,6 +23,7 @@ const uiState: UiState = {
   previewRequestId: 0,
   previewTimer: null,
   sourceName: "openapi",
+  sourceUrl: null,
 };
 
 const sourceInput = getElement<HTMLInputElement>("sourceFile");
@@ -39,6 +42,7 @@ sourceInput.addEventListener("change", async () => {
     }
 
     uiState.sourceName = getFileNameWithoutExt(file.name);
+    uiState.sourceUrl = null;
     sourceText.value = await file.text();
     setStatus(`파일 로드 완료: ${file.name}`);
     await updatePreview();
@@ -79,7 +83,7 @@ convertButton.addEventListener("click", async () => {
     cancelPreviewUpdate();
     resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
-    const xlsxData = await buildXlsxDataFromText(raw);
+    const xlsxData = await buildXlsxDataFromText(raw, uiState.sourceUrl);
 
     setStatus("미리 보기 생성 중...");
     renderPreview(xlsxData, previewContainer);
@@ -150,6 +154,7 @@ async function loadFromUrl(): Promise<void> {
 
     sourceText.value = await response.text();
     uiState.sourceName = getSourceNameFromUrl(url);
+    uiState.sourceUrl = url.href;
     setStatus(`URL 로드 완료: ${url.href}`);
     await updatePreview();
   } catch (error) {
@@ -171,7 +176,7 @@ async function updatePreview(): Promise<void> {
 
   try {
     setStatus("미리 보기 업데이트 중...");
-    const xlsxData = await buildXlsxDataFromText(raw);
+    const xlsxData = await buildXlsxDataFromText(raw, uiState.sourceUrl);
     if (requestId !== uiState.previewRequestId) return;
 
     renderPreview(xlsxData, previewContainer);
@@ -205,13 +210,34 @@ function clearPreviewTimer(): void {
   uiState.previewTimer = null;
 }
 
-async function buildXlsxDataFromText(raw: string): Promise<XlsxData> {
-  const document = await parseOpenApiFromText(raw);
+async function buildXlsxDataFromText(raw: string, baseUrl?: string | null): Promise<XlsxData> {
+  const document = await parseOpenApiFromText(raw, baseUrl);
   const validated = validateOpenApiDocument(document);
   return extractEndpoints(validated);
 }
 
-async function parseOpenApiFromText(raw: string): Promise<OpenAPI.Document> {
+async function parseOpenApiFromText(
+  raw: string,
+  baseUrl?: string | null
+): Promise<OpenAPI.Document> {
+  if (baseUrl) {
+    return (await SwaggerParser.dereference(baseUrl, {
+      resolve: {
+        http: {
+          order: 1,
+          canRead: /^https?:\/\//i,
+          async read(file: SwaggerParser.FileInfo) {
+            if (file.url === baseUrl) return raw;
+            const response = await fetch(file.url);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+            }
+            return response.text();
+          },
+        },
+      },
+    })) as OpenAPI.Document;
+  }
   const parsed = jsYaml.load(raw) as OpenAPI.Document;
   return (await SwaggerParser.dereference(parsed)) as OpenAPI.Document;
 }
@@ -262,9 +288,4 @@ function getElement<T extends HTMLElement>(id: string): T {
 function getSourceNameFromUrl(url: URL): string {
   const lastSegment = url.pathname.split("/").filter(Boolean).pop();
   return lastSegment ? getFileNameWithoutExt(lastSegment) : "openapi";
-}
-
-function getFileNameWithoutExt(fileName: string): string {
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }
