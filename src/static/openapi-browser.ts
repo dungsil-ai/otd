@@ -220,10 +220,26 @@ async function parseOpenApiFromText(
   raw: string,
   baseUrl?: string | null
 ): Promise<OpenAPI.Document> {
+  if (baseUrl) {
+    return (await SwaggerParser.dereference(baseUrl, {
+      resolve: {
+        http: {
+          order: 1,
+          canRead: /^https?:\/\//i,
+          async read(file: SwaggerParser.FileInfo) {
+            if (file.url === baseUrl) return raw;
+            const response = await fetch(file.url);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+            }
+            return response.text();
+          },
+        },
+      },
+    })) as OpenAPI.Document;
+  }
   const parsed = jsYaml.load(raw) as OpenAPI.Document;
-  return baseUrl
-    ? ((await SwaggerParser.dereference(baseUrl, parsed, {})) as OpenAPI.Document)
-    : ((await SwaggerParser.dereference(parsed)) as OpenAPI.Document);
+  return (await SwaggerParser.dereference(parsed)) as OpenAPI.Document;
 }
 
 function validateOpenApiDocument(api: OpenAPI.Document): OpenAPIV3.Document {

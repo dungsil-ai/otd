@@ -46,7 +46,7 @@ const FIXTURES: Fixture[] = [
   },
   {
     name: "edge-cases.yaml",
-    expectedEndpoints: 22,
+    expectedEndpoints: 26,
     shouldError: false,
     expectedTitle: "Edge Cases API",
     expectedFirstEndpoint: { method: "GET", path: "/" },
