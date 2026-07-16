@@ -31,7 +31,7 @@ class OpenApiToDocumentPluginTest {
         OpenApiDocumentExtension extension =
                 project.getExtensions().getByType(OpenApiDocumentExtension.class);
         assertAll(
-                () -> assertEquals("1.0.0", extension.getOtdVersion().get()),
+                () -> assertEquals(PluginVersion.load(), extension.getOtdVersion().get()),
                 () -> assertEquals(
                         new File(buildDirectory, "api-document"),
                         extension.getOutputDirectory().get().getAsFile()),

@@ -30,7 +30,6 @@ import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
-import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFiles;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
@@ -86,7 +85,6 @@ public abstract class GenerateApiDocumentTask extends DefaultTask {
      *
      * @return 변환에 사용할 OTD 실행 파일
      */
-    @Optional
     @InputFile
     @PathSensitive(PathSensitivity.NONE)
     public abstract RegularFileProperty getOtdExecutable();
