@@ -49058,13 +49058,17 @@ function applyMethodColor(cell, method) {
     right: { style: "thin" }
   };
 }
-function createTagSheets(workbook, data) {
-  const tagDescriptions = new Map;
-  for (const tag of data.tags) {
+function buildTagDescriptions(tags) {
+  const descriptions = new Map;
+  for (const tag of tags) {
     if (tag.description) {
-      tagDescriptions.set(tag.name, tag.description);
+      descriptions.set(tag.name, tag.description);
     }
   }
+  return descriptions;
+}
+function createTagSheets(workbook, data) {
+  const tagDescriptions = buildTagDescriptions(data.tags);
   const tagGroups = new Map;
   for (const endpoint of data.endpoints) {
     const tags = endpoint.tags.length > 0 ? endpoint.tags : ["기타"];
