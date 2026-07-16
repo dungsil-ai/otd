@@ -401,17 +401,21 @@ function applyMethodColor(cell: ExcelJS.Cell, method: string): void {
 // 시트 4+: 태그별 API 상세
 // ============================================================================
 
+function buildTagDescriptions(tags: XlsxData["tags"]): Map<string, string> {
+  const descriptions = new Map<string, string>();
+  for (const tag of tags) {
+    if (tag.description) {
+      descriptions.set(tag.name, tag.description);
+    }
+  }
+  return descriptions;
+}
+
 /**
  * 태그별 API 상세 시트를 생성합니다.
  */
 function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
-  // 태그 이름 -> description 매핑 (시트명에 사용)
-  const tagDescriptions = new Map<string, string>();
-  for (const tag of data.tags) {
-    if (tag.description) {
-      tagDescriptions.set(tag.name, tag.description);
-    }
-  }
+  const tagDescriptions = buildTagDescriptions(data.tags);
 
   // 태그별로 엔드포인트 그룹화
   const tagGroups = new Map<string, EndpointInfo[]>();

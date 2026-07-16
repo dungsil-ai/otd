@@ -455,7 +455,6 @@ describe("Static HTML Converter E2E", () => {
       await context.close();
     }
   }, 60_000);
-
 });
 
 function buildInlineOpenApi(description: string, path: string): string {

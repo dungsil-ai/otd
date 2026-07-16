@@ -210,10 +210,7 @@ function clearPreviewTimer(): void {
   uiState.previewTimer = null;
 }
 
-async function buildXlsxDataFromText(
-  raw: string,
-  baseUrl?: string | null
-): Promise<XlsxData> {
+async function buildXlsxDataFromText(raw: string, baseUrl?: string | null): Promise<XlsxData> {
   const document = await parseOpenApiFromText(raw, baseUrl);
   const validated = validateOpenApiDocument(document);
   return extractEndpoints(validated);

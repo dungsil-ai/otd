@@ -159,7 +159,6 @@ describe("XLSX Writer", () => {
       }
     });
   });
-
 });
 
 function buildMultiTagDoc(): OpenAPIV3.Document {

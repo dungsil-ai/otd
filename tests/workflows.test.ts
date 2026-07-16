@@ -256,7 +256,7 @@ describe("GitHub Actions workflows", () => {
 
     expect(content).toContain("fetch-depth: 0");
     expect(content).toContain("git fetch --force --tags origin");
-    expect(content).toContain('if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then');
+    expect(content).toContain(`if [ "\${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then`);
     expect(content).toContain('git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG"');
     expect(createTagIndex).toBeGreaterThan(-1);
     expect(pushTagIndex).toBeGreaterThan(createTagIndex);
