@@ -76,10 +76,12 @@ export function renderPreview(data: XlsxData, container: HTMLElement): void {
 function buildTagGroups(data: XlsxData): Map<string, EndpointInfo[]> {
   const groups = new Map<string, EndpointInfo[]>();
   for (const endpoint of data.endpoints) {
-    const tag = endpoint.tags[0] ?? "기타";
-    const group = groups.get(tag) ?? [];
-    group.push(endpoint);
-    groups.set(tag, group);
+    const tags = endpoint.tags.length > 0 ? endpoint.tags : ["기타"];
+    for (const tag of tags) {
+      const group = groups.get(tag) ?? [];
+      group.push(endpoint);
+      groups.set(tag, group);
+    }
   }
   return groups;
 }

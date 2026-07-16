@@ -432,6 +432,29 @@ describe("Static HTML Converter E2E", () => {
       await context.close();
     }
   }, 60_000);
+  // 주의: Windows에서는 Playwright chromium.launch가 실패할 수 있다.
+  it("다중 태그 엔드포인트의 모든 태그 탭을 표시해야 한다", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(baseUrl);
+      await page.fill("#sourceText", buildMultiTagOpenApi());
+      await page.click("#convertBtn");
+      await expectPreviewPath(page, "/multi-tag");
+
+      const tabLabels = await page.evaluate(() =>
+        Array.from(document.querySelectorAll(".preview-tab-btn")).map(
+          (tab) => tab.textContent?.trim() ?? ""
+        )
+      );
+      expect(tabLabels).toContain("users API");
+      expect(tabLabels).toContain("admin API");
+      expect(tabLabels).toContain("products API");
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
 
 });
 
@@ -485,6 +508,21 @@ function buildTaggedOpenApi(tagCount: number): string {
     },
     tags,
     paths,
+  });
+}
+
+function buildMultiTagOpenApi(): string {
+  return JSON.stringify({
+    openapi: "3.0.0",
+    info: { title: "Multi-tag API", version: "1.0.0" },
+    paths: {
+      "/multi-tag": {
+        get: {
+          tags: ["users", "admin", "products"],
+          responses: { "200": { description: "성공" } },
+        },
+      },
+    },
   });
 }
 

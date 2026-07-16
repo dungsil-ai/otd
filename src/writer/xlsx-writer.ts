@@ -417,10 +417,12 @@ function createTagSheets(workbook: ExcelJS.Workbook, data: XlsxData): void {
   const tagGroups = new Map<string, EndpointInfo[]>();
 
   for (const endpoint of data.endpoints) {
-    const tag = endpoint.tags[0] ?? "기타";
-    const group = tagGroups.get(tag) ?? [];
-    group.push(endpoint);
-    tagGroups.set(tag, group);
+    const tags = endpoint.tags.length > 0 ? endpoint.tags : ["기타"];
+    for (const tag of tags) {
+      const group = tagGroups.get(tag) ?? [];
+      group.push(endpoint);
+      tagGroups.set(tag, group);
+    }
   }
 
   // 각 태그별로 시트 생성

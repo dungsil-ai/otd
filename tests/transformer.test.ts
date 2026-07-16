@@ -313,3 +313,34 @@ describe("Endpoint Extractor", () => {
     });
   });
 });
+
+function buildMultiTagDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Multi-tag API", version: "1.0.0" },
+    paths: {
+      "/multi-tag": {
+        get: {
+          tags: ["users", "admin"],
+          responses: { "200": { description: "성공" } },
+        },
+        post: {
+          tags: ["users", "admin", "products"],
+          responses: { "201": { description: "생성됨" } },
+        },
+      },
+    },
+  };
+}
+
+describe("Multi-tag endpoints", () => {
+  it("엔드포인트의 모든 태그를 보존해야 한다", () => {
+    const endpoint = extractEndpoints(buildMultiTagDoc()).endpoints.find(
+      ({ method, path }) => method === "GET" && path === "/multi-tag"
+    );
+
+    expect(endpoint?.tags).toHaveLength(2);
+    expect(endpoint?.tags).toContain("users");
+    expect(endpoint?.tags).toContain("admin");
+  });
+});

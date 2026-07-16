@@ -93,6 +93,7 @@ describe("XLSX Writer", () => {
       await expect(writeXlsx(xlsxData, optionsNoForce)).rejects.toThrow();
     });
   });
+
   describe("createTagSheets with sanitization", () => {
     it("금지 문자가 포함된 태그명을 정리하고 중복을 구분해야 한다", async () => {
       const doc = (await parseOpenApi("tests/fixtures/edge-cases.yaml")) as OpenAPIV3.Document;
@@ -129,4 +130,53 @@ describe("XLSX Writer", () => {
       expect(sheetNames).toContain(`${"A".repeat(27)} (2)`);
     });
   });
+  describe("createTagSheets with multiple tags", () => {
+    it("두 태그 시트 모두에 다중 태그 엔드포인트를 포함해야 한다", () => {
+      const workbook = createWorkbook(extractEndpoints(buildMultiTagDoc()));
+
+      for (const sheetName of ["users API", "admin API"]) {
+        const sheet = workbook.getWorksheet(sheetName);
+        expect(sheet).toBeDefined();
+        let containsPath = false;
+        sheet?.eachRow((row) => {
+          if (row.getCell(5).value === "/multi-tag") containsPath = true;
+        });
+        expect(containsPath).toBe(true);
+      }
+    });
+
+    it("세 태그 시트 모두에 다중 태그 엔드포인트를 포함해야 한다", () => {
+      const workbook = createWorkbook(extractEndpoints(buildMultiTagDoc()));
+
+      for (const sheetName of ["users API", "admin API", "products API"]) {
+        const sheet = workbook.getWorksheet(sheetName);
+        expect(sheet).toBeDefined();
+        let containsPath = false;
+        sheet?.eachRow((row) => {
+          if (row.getCell(5).value === "/multi-tag") containsPath = true;
+        });
+        expect(containsPath).toBe(true);
+      }
+    });
+  });
+
 });
+
+function buildMultiTagDoc(): OpenAPIV3.Document {
+  return {
+    openapi: "3.0.0",
+    info: { title: "Multi-tag API", version: "1.0.0" },
+    paths: {
+      "/multi-tag": {
+        get: {
+          tags: ["users", "admin"],
+          responses: { "200": { description: "성공" } },
+        },
+        post: {
+          tags: ["users", "admin", "products"],
+          responses: { "201": { description: "생성됨" } },
+        },
+      },
+    },
+  };
+}
