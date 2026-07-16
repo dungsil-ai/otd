@@ -49949,8 +49949,27 @@ async function buildXlsxDataFromText(raw, baseUrl) {
   return extractEndpoints(validated);
 }
 async function parseOpenApiFromText(raw, baseUrl) {
+  if (baseUrl) {
+    return await import_swagger_parser.default.dereference(baseUrl, {
+      resolve: {
+        http: {
+          order: 1,
+          canRead: /^https?:\/\//i,
+          async read(file) {
+            if (file.url === baseUrl)
+              return raw;
+            const response = await fetch(file.url);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+            }
+            return response.text();
+          }
+        }
+      }
+    });
+  }
   const parsed = jsYaml.load(raw);
-  return baseUrl ? await import_swagger_parser.default.dereference(baseUrl, parsed, {}) : await import_swagger_parser.default.dereference(parsed);
+  return await import_swagger_parser.default.dereference(parsed);
 }
 function validateOpenApiDocument(api) {
   if (!("openapi" in api) || typeof api.openapi !== "string") {
