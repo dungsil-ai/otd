@@ -130,10 +130,17 @@ function extractEndpointInfo(
   operation: OpenAPIV3.OperationObject,
   pathItem: OpenAPIV3.PathItemObject
 ): EndpointInfo {
-  // path-level 파라미터와 operation-level 파라미터 병합
+  // operation-level 파라미터가 동일한 path-level 파라미터를 대체합니다.
   const pathParams = (pathItem.parameters ?? []) as OpenAPIV3.ParameterObject[];
   const operationParams = (operation.parameters ?? []) as OpenAPIV3.ParameterObject[];
-  const allParams = [...pathParams, ...operationParams];
+  const paramMap = new Map<string, OpenAPIV3.ParameterObject>();
+  for (const param of pathParams) {
+    paramMap.set(`${param.in}|${param.name}`, param);
+  }
+  for (const param of operationParams) {
+    paramMap.set(`${param.in}|${param.name}`, param);
+  }
+  const allParams = Array.from(paramMap.values());
 
   return {
     method,
