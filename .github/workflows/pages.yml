@@ -1,20 +1,13 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: [Build and Test]
+    types: [completed]
     branches: [main]
-    paths:
-      - '.github/workflows/pages.yml'
-      - 'src/writer/**'
-      - 'src/transformer/**'
-      - 'src/models/**'
-      - 'src/static/**'
-      - 'scripts/build.mjs'
-      - 'package.json'
-      - 'bun.lock'
-  workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -22,51 +15,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-pages:
+
+  deploy-pages:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      actions: read
+      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Download tested build artifact
+        uses: actions/download-artifact@v4
         with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build static Pages site
-        run: bun run build
+          name: dist
+          path: dist/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Prepare Pages artifact
         run: |
           mkdir -p pages
           cp dist/index.html pages/index.html
           cp dist/openapi-to-document.js pages/openapi-to-document.js
-
-      - name: Upload Pages artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pages
-          path: pages/
-          if-no-files-found: error
-
-  deploy-pages:
-    needs: build-pages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download Pages artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: pages
-          path: pages/
 
       - name: Deploy Pages to gh-pages
         env:
