@@ -19,6 +19,7 @@ import type {
   TagInfo,
   XlsxData,
 } from "../models/types";
+import { isFileContentType } from "../utils/common";
 
 /** 지원하는 HTTP 메서드 목록 */
 const HTTP_METHODS: HttpMethod[] = ["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS"];
@@ -705,12 +706,4 @@ function generateSampleJson(schema: OpenAPIV3.SchemaObject | undefined): string 
     // 샘플 생성 실패 시 undefined 반환
     return undefined;
   }
-}
-
-/**
- * 파일 전송 관련 content-type인지 확인합니다.
- */
-function isFileContentType(contentType: string): boolean {
-  const lower = contentType.toLowerCase();
-  return lower === "application/octet-stream" || lower.startsWith("multipart/");
 }

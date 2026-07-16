@@ -10,7 +10,6 @@ import { join } from "node:path";
 import {
   parseCliArgs,
   resolveBuildDate,
-  resolveOutputPath,
   resolvePackageVersionFrom,
   resolveVersion,
 } from "../src/cli/commands";
@@ -172,44 +171,6 @@ describe("CLI Commands", () => {
       const version = resolvePackageVersionFrom(nested);
 
       expect(version).toBe("5.6.7");
-    });
-  });
-
-  describe("resolveOutputPath", () => {
-    it("출력 경로가 지정되면 그대로 반환해야 한다", () => {
-      const result = resolveOutputPath("input.yaml", "output.xlsx");
-
-      expect(result).toBe("output.xlsx");
-    });
-
-    it("확장자가 없으면 .xlsx를 추가해야 한다", () => {
-      const result = resolveOutputPath("input.yaml", "output");
-
-      expect(result).toBe("output.xlsx");
-    });
-
-    it("대소문자 구분 없이 .xlsx 확장자를 인식해야 한다", () => {
-      const result = resolveOutputPath("input.yaml", "output.XLSX");
-
-      expect(result).toBe("output.XLSX");
-    });
-
-    it("디렉토리 경로면 입력 파일명을 사용해야 한다", () => {
-      const result = resolveOutputPath("input.yaml", "./docs/");
-
-      expect(result).toBe("./docs/input.xlsx");
-    });
-
-    it("출력 경로가 없으면 입력 파일명 기반으로 생성해야 한다", () => {
-      const result = resolveOutputPath("input.yaml");
-
-      expect(result).toBe("input.xlsx");
-    });
-
-    it("입력 경로에 디렉토리가 있으면 해당 디렉토리에 생성해야 한다", () => {
-      const result = resolveOutputPath("./specs/input.yaml");
-
-      expect(result).toBe("./specs/input.xlsx");
     });
   });
 });

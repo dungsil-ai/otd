@@ -10,11 +10,17 @@ import type {
   ParameterInfo,
   RequestBodyInfo,
   ResponseInfo,
-  SampleInfo,
   SchemaPropertyInfo,
   SecuritySchemeInfo,
   XlsxData,
 } from "../models/types";
+import {
+  buildEndpointUrl,
+  formatSampleTitle,
+  isFileContentType,
+  PARAMETER_TYPE_LABELS,
+  PARAMETER_TYPE_ORDER,
+} from "../utils/common";
 
 /**
  * XlsxData를 HTML 미리 보기로 렌더링하여 container에 삽입합니다.
@@ -216,15 +222,6 @@ function buildEndpointBlock(endpoint: EndpointInfo, data: XlsxData): string {
 // 파라미터 섹션
 // ============================================================================
 
-const PARAMETER_TYPE_LABELS: Record<string, string> = {
-  path: "요청 경로",
-  query: "요청 쿼리",
-  header: "요청 헤더",
-  cookie: "요청 쿠키",
-};
-
-const PARAMETER_TYPE_ORDER = ["path", "query", "header", "cookie"];
-
 function buildParametersSectionHtml(parameters: ParameterInfo[]): string {
   const grouped = new Map<string, ParameterInfo[]>();
   for (const param of parameters) {
@@ -272,8 +269,7 @@ function buildRequestBodySectionHtml(requestBody: RequestBodyInfo): string {
 
   let content: string;
   if (requestBody.properties.length === 0) {
-    const lower = requestBody.contentType.toLowerCase();
-    const isFile = lower.includes("octet-stream") || lower.includes("multipart");
+    const isFile = isFileContentType(requestBody.contentType);
     content = `<p class="empty-note">${isFile ? "(첨부파일)" : "(스키마 없음)"}</p>`;
   } else {
     content = buildPropertiesTableHtml(requestBody.properties);
@@ -362,20 +358,6 @@ function buildSampleSectionHtml(title: string, value: string): string {
 // ============================================================================
 // 유틸리티
 // ============================================================================
-
-function formatSampleTitle(baseTitle: string, sample: SampleInfo): string {
-  if (sample.summary) return `${baseTitle}: ${sample.summary}`;
-  if (sample.name && sample.name !== "default") return `${baseTitle}: ${sample.name}`;
-  return baseTitle;
-}
-
-function buildEndpointUrl(baseUrl: string, endpointPath: string): string {
-  if (!baseUrl) return endpointPath;
-  if (!endpointPath) return baseUrl;
-  const trimmedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const trimmedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
-  return `${trimmedBase}${trimmedPath}`;
-}
 
 function resolveServerRows(
   servers: Array<{ url: string; description?: string }>,

@@ -6,6 +6,7 @@ import jsYaml from "js-yaml";
 import type { OpenAPI, OpenAPIV3 } from "openapi-types";
 import type { XlsxData } from "../models/types";
 import { extractEndpoints } from "../transformer/endpoint-extractor";
+import { getFileNameWithoutExt } from "../utils/common";
 import { createWorkbook } from "../writer/xlsx-writer";
 import { renderPreview } from "./openapi-preview";
 
@@ -262,9 +263,4 @@ function getElement<T extends HTMLElement>(id: string): T {
 function getSourceNameFromUrl(url: URL): string {
   const lastSegment = url.pathname.split("/").filter(Boolean).pop();
   return lastSegment ? getFileNameWithoutExt(lastSegment) : "openapi";
-}
-
-function getFileNameWithoutExt(fileName: string): string {
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }

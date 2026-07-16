@@ -12,11 +12,18 @@ import {
   type ParameterInfo,
   type RequestBodyInfo,
   type ResponseInfo,
-  type SampleInfo,
   type SchemaPropertyInfo,
   type SecuritySchemeInfo,
   type XlsxData,
 } from "../models/types";
+import {
+  buildEndpointUrl,
+  formatSampleTitle,
+  isFileContentType,
+  PARAMETER_TYPE_LABELS,
+  PARAMETER_TYPE_ORDER,
+  resolveOutputPath,
+} from "../utils/common";
 
 // ============================================================================
 // 스타일 상수
@@ -151,7 +158,7 @@ const THICK_BORDER: Partial<ExcelJS.Borders> = {
  */
 export async function writeXlsx(data: XlsxData, options: CliOptions): Promise<string> {
   const { existsSync } = await import("node:fs");
-  const outputPath = resolveOutputPath(options);
+  const outputPath = resolveOutputPath(options.inputPath, options.outputPath);
 
   // 파일 존재 여부 확인 (force 옵션 처리)
   if (existsSync(outputPath) && !options.force) {
@@ -195,51 +202,6 @@ export function createWorkbook(data: XlsxData): ExcelJS.Workbook {
   createTagSheets(workbook, data);
 
   return workbook;
-}
-
-// ============================================================================
-// 경로 처리
-// ============================================================================
-
-/**
- * 출력 경로를 결정합니다.
- */
-function resolveOutputPath(options: CliOptions): string {
-  if (options.outputPath) {
-    let path = options.outputPath;
-
-    // 디렉토리인 경우 입력 파일명 사용
-    if (path.endsWith("/") || path.endsWith("\\")) {
-      const inputName = getFileNameWithoutExt(options.inputPath);
-      path = `${path}${inputName}.xlsx`;
-    }
-    // 확장자가 없으면 추가
-    else if (!path.toLowerCase().endsWith(".xlsx")) {
-      path = `${path}.xlsx`;
-    }
-
-    return path;
-  }
-
-  // 기본: 입력 파일과 동일한 위치, 동일한 이름
-  const inputDir = getDirectory(options.inputPath);
-  const inputName = getFileNameWithoutExt(options.inputPath);
-  return inputDir ? `${inputDir}/${inputName}.xlsx` : `${inputName}.xlsx`;
-}
-
-/**
- * 파일명에서 확장자를 제거합니다.
- */
-function getFileNameWithoutExt(filePath: string): string {
-  const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
-}
-
-function getDirectory(filePath: string): string {
-  const lastSlash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
-  if (lastSlash === -1) return "";
-  return filePath.substring(0, lastSlash);
 }
 
 // ============================================================================
@@ -646,21 +608,6 @@ function writeEndpointResponsesSection(
 }
 
 /**
- * 파라미터 타입(in)에 대한 한글 라벨 매핑
- */
-const PARAMETER_TYPE_LABELS: Record<string, string> = {
-  path: "요청 경로",
-  query: "요청 쿼리",
-  header: "요청 헤더",
-  cookie: "요청 쿠키",
-};
-
-/**
- * 파라미터 타입(in)의 정렬 순서
- */
-const PARAMETER_TYPE_ORDER: string[] = ["path", "query", "header", "cookie"];
-
-/**
  * 파라미터 섹션을 타입별로 작성합니다.
  * 반환값: [마지막 행 번호, 작성된 섹션 수]
  */
@@ -749,7 +696,10 @@ function writeSingleParameterSection(
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
+    sheet.getCell(`E${row}`).alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
     row++;
   }
 
@@ -924,20 +874,6 @@ function writeSampleSection(
 // ============================================================================
 
 /**
- * 샘플 제목을 포맷합니다.
- * 샘플에 이름이나 요약이 있으면 제목에 포함합니다.
- */
-function formatSampleTitle(baseTitle: string, sample: SampleInfo): string {
-  if (sample.summary) {
-    return `${baseTitle}: ${sample.summary}`;
-  }
-  if (sample.name && sample.name !== "default") {
-    return `${baseTitle}: ${sample.name}`;
-  }
-  return baseTitle;
-}
-
-/**
  * 셀에 스타일을 적용합니다.
  */
 function applyStyle(cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>): void {
@@ -945,14 +881,6 @@ function applyStyle(cell: ExcelJS.Cell, style: Partial<ExcelJS.Style>): void {
   if (style.fill) cell.fill = style.fill as ExcelJS.Fill;
   if (style.alignment) cell.alignment = style.alignment;
   if (style.border) cell.border = style.border;
-}
-
-/**
- * 파일 전송 관련 content-type인지 확인합니다.
- */
-function isFileContentType(contentType: string): boolean {
-  const lower = contentType.toLowerCase();
-  return lower.includes("octet-stream") || lower.includes("multipart");
 }
 
 function resolveServerRows(
@@ -1025,18 +953,6 @@ function findServerIndex(servers: { descriptor: string }[], keywords: string[]):
   );
 }
 
-function buildEndpointUrl(baseUrl: string, endpointPath: string): string {
-  if (!baseUrl) {
-    return endpointPath;
-  }
-  if (!endpointPath) {
-    return baseUrl;
-  }
-  const trimmedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const trimmedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
-  return `${trimmedBase}${trimmedPath}`;
-}
-
 /**
  * 블록 영역에 테두리를 적용합니다.
  * - 모든 셀에 기본(thin) 테두리 적용
@@ -1096,7 +1012,9 @@ function applyBlockOutlineRow(
     return;
   }
 
-  leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, { style: "thin" });
+  leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, {
+    style: "thin",
+  });
   rightMaster.border = buildRowBorder(isTopRow, isBottomRow, { style: "thin" }, THICK_BORDER.right);
 
   applyMiddleCellBorders(sheet, columns, row, isTopRow, isBottomRow, leftMaster, rightMaster);
