@@ -48321,6 +48321,59 @@ _registerSampler("number", sampleNumber);
 _registerSampler("object", sampleObject);
 _registerSampler("string", sampleString);
 
+// src/utils/common.ts
+function getFileNameWithoutExt(filePath) {
+  const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+  const dotIndex = fileName.lastIndexOf(".");
+  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+}
+function buildEndpointUrl(baseUrl, endpointPath) {
+  if (!baseUrl)
+    return endpointPath;
+  if (!endpointPath)
+    return baseUrl;
+  const tb = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  const tp = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+  return `${tb}${tp}`;
+}
+function formatSampleTitle(baseTitle, sample2) {
+  if (sample2.summary)
+    return `${baseTitle}: ${sample2.summary}`;
+  if (sample2.name && sample2.name !== "default")
+    return `${baseTitle}: ${sample2.name}`;
+  return baseTitle;
+}
+function isFileContentType(contentType) {
+  const l = contentType.toLowerCase();
+  return l === "application/octet-stream" || l.startsWith("multipart/");
+}
+var PARAMETER_TYPE_LABELS = {
+  path: "요청 경로",
+  query: "요청 쿼리",
+  header: "요청 헤더",
+  cookie: "요청 쿠키"
+};
+var PARAMETER_TYPE_ORDER = ["path", "query", "header", "cookie"];
+var SHEET_NAME_FORBIDDEN = /[*?:/\\[\]]/g;
+var MAX_SHEET_NAME_LENGTH = 31;
+function sanitizeSheetName(rawName, usedNames) {
+  let name = rawName.replace(SHEET_NAME_FORBIDDEN, " ").replace(/^'+|'+$/g, "").trim().replace(/\s+/g, " ");
+  if (name.length === 0)
+    name = "Untitled";
+  name = name.substring(0, MAX_SHEET_NAME_LENGTH);
+  let candidate = name;
+  let suffix = 2;
+  while (usedNames.has(candidate.toLowerCase())) {
+    const suffixStr = ` (${suffix})`;
+    candidate = `${name.substring(0, MAX_SHEET_NAME_LENGTH - suffixStr.length)}${suffixStr}`;
+    suffix++;
+    if (suffix > 99)
+      break;
+  }
+  usedNames.add(candidate.toLowerCase());
+  return candidate;
+}
+
 // src/transformer/endpoint-extractor.ts
 var HTTP_METHODS = ["GET", "POST", "PATCH", "PUT", "DELETE", "HEAD", "OPTIONS"];
 function extractEndpoints(document2) {
@@ -48390,7 +48443,14 @@ function extractAllEndpoints(document2) {
 function extractEndpointInfo(path, method, operation, pathItem) {
   const pathParams = pathItem.parameters ?? [];
   const operationParams = operation.parameters ?? [];
-  const allParams = [...pathParams, ...operationParams];
+  const paramMap = new Map;
+  for (const param of pathParams) {
+    paramMap.set(`${param.in}|${param.name}`, param);
+  }
+  for (const param of operationParams) {
+    paramMap.set(`${param.in}|${param.name}`, param);
+  }
+  const allParams = Array.from(paramMap.values());
   return {
     method,
     path,
@@ -48754,10 +48814,6 @@ function generateSampleJson(schema2) {
     return;
   }
 }
-function isFileContentType(contentType) {
-  const lower = contentType.toLowerCase();
-  return lower === "application/octet-stream" || lower.startsWith("multipart/");
-}
 
 // src/writer/xlsx-writer.ts
 var import_exceljs = __toESM(require_exceljs_min(), 1);
@@ -49011,14 +49067,21 @@ function createTagSheets(workbook, data) {
   }
   const tagGroups = new Map;
   for (const endpoint of data.endpoints) {
-    const tag = endpoint.tags[0] ?? "기타";
-    const group = tagGroups.get(tag) ?? [];
-    group.push(endpoint);
-    tagGroups.set(tag, group);
+    const tags = endpoint.tags.length > 0 ? endpoint.tags : ["기타"];
+    for (const tag of tags) {
+      const group = tagGroups.get(tag) ?? [];
+      group.push(endpoint);
+      tagGroups.set(tag, group);
+    }
+  }
+  const usedNames = new Set;
+  for (const ws of workbook.worksheets) {
+    usedNames.add(ws.name.toLowerCase());
   }
   for (const [tagName, endpoints] of tagGroups) {
-    const displayName = tagDescriptions.get(tagName) ?? tagName;
-    const sheetName = displayName.toUpperCase().endsWith("API") ? displayName.substring(0, 31) : `${displayName} API`.substring(0, 31);
+    const rawDisplayName = tagDescriptions.get(tagName) ?? tagName;
+    const displayName = rawDisplayName.toUpperCase().endsWith("API") ? rawDisplayName : `${rawDisplayName} API`;
+    const sheetName = sanitizeSheetName(displayName, usedNames);
     const sheet = workbook.addWorksheet(sheetName);
     sheet.columns = [
       { width: 3 },
@@ -49136,13 +49199,6 @@ function writeEndpointResponsesSection(sheet, responses, startRow) {
   }
   return row;
 }
-var PARAMETER_TYPE_LABELS = {
-  path: "요청 경로",
-  query: "요청 쿼리",
-  header: "요청 헤더",
-  cookie: "요청 쿠키"
-};
-var PARAMETER_TYPE_ORDER = ["path", "query", "header", "cookie"];
 function writeParametersSections(sheet, parameters, startRow) {
   const grouped = new Map;
   for (const param of parameters) {
@@ -49198,7 +49254,10 @@ function writeSingleParameterSection(sheet, paramType, parameters, startRow) {
     for (const col of ["B", "C", "D", "E", "F", "G"]) {
       applyStyle(sheet.getCell(`${col}${row}`), CELL_STYLE);
     }
-    sheet.getCell(`E${row}`).alignment = { horizontal: "center", vertical: "middle" };
+    sheet.getCell(`E${row}`).alignment = {
+      horizontal: "center",
+      vertical: "middle"
+    };
     row++;
   }
   return row;
@@ -49210,7 +49269,7 @@ function writeRequestBodySection(sheet, requestBody, startRow) {
   sheet.mergeCells(`B${row}:G${row}`);
   row++;
   if (requestBody.properties.length === 0) {
-    const isFile = isFileContentType2(requestBody.contentType);
+    const isFile = isFileContentType(requestBody.contentType);
     sheet.getCell(`B${row}`).value = isFile ? "(첨부파일)" : "(스키마 없음)";
     applyStyle(sheet.getCell(`B${row}`), CELL_STYLE);
     sheet.mergeCells(`B${row}:G${row}`);
@@ -49300,15 +49359,6 @@ function writeSampleSection(sheet, title, sample2, startRow) {
   row++;
   return row;
 }
-function formatSampleTitle(baseTitle, sample2) {
-  if (sample2.summary) {
-    return `${baseTitle}: ${sample2.summary}`;
-  }
-  if (sample2.name && sample2.name !== "default") {
-    return `${baseTitle}: ${sample2.name}`;
-  }
-  return baseTitle;
-}
 function applyStyle(cell, style) {
   if (style.font)
     cell.font = style.font;
@@ -49318,10 +49368,6 @@ function applyStyle(cell, style) {
     cell.alignment = style.alignment;
   if (style.border)
     cell.border = style.border;
-}
-function isFileContentType2(contentType) {
-  const lower = contentType.toLowerCase();
-  return lower.includes("octet-stream") || lower.includes("multipart");
 }
 function resolveServerRows(servers, endpointPath) {
   if (servers.length === 0) {
@@ -49375,17 +49421,6 @@ function resolveServerRows(servers, endpointPath) {
 function findServerIndex(servers, keywords) {
   return servers.findIndex((server) => keywords.some((keyword) => server.descriptor.includes(keyword)));
 }
-function buildEndpointUrl(baseUrl, endpointPath) {
-  if (!baseUrl) {
-    return endpointPath;
-  }
-  if (!endpointPath) {
-    return baseUrl;
-  }
-  const trimmedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const trimmedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
-  return `${trimmedBase}${trimmedPath}`;
-}
 function applyBlockOutline(sheet, startRow, endRow, startCol, endCol) {
   const columns = buildColumnRange(startCol, endCol);
   if (columns.length === 0) {
@@ -49414,7 +49449,9 @@ function applyBlockOutlineRow(sheet, columns, row, startRow, endRow, leftCol, ri
     leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, THICK_BORDER.right);
     return;
   }
-  leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, { style: "thin" });
+  leftMaster.border = buildRowBorder(isTopRow, isBottomRow, THICK_BORDER.left, {
+    style: "thin"
+  });
   rightMaster.border = buildRowBorder(isTopRow, isBottomRow, { style: "thin" }, THICK_BORDER.right);
   applyMiddleCellBorders(sheet, columns, row, isTopRow, isBottomRow, leftMaster, rightMaster);
 }
@@ -49513,10 +49550,12 @@ function renderPreview(data, container) {
 function buildTagGroups(data) {
   const groups = new Map;
   for (const endpoint of data.endpoints) {
-    const tag = endpoint.tags[0] ?? "기타";
-    const group = groups.get(tag) ?? [];
-    group.push(endpoint);
-    groups.set(tag, group);
+    const tags = endpoint.tags.length > 0 ? endpoint.tags : ["기타"];
+    for (const tag of tags) {
+      const group = groups.get(tag) ?? [];
+      group.push(endpoint);
+      groups.set(tag, group);
+    }
   }
   return groups;
 }
@@ -49603,13 +49642,6 @@ function buildEndpointBlock(endpoint, data) {
   }
   return `<div class="endpoint-block">${parts.join("")}</div>`;
 }
-var PARAMETER_TYPE_LABELS2 = {
-  path: "요청 경로",
-  query: "요청 쿼리",
-  header: "요청 헤더",
-  cookie: "요청 쿠키"
-};
-var PARAMETER_TYPE_ORDER2 = ["path", "query", "header", "cookie"];
 function buildParametersSectionHtml(parameters) {
   const grouped = new Map;
   for (const param of parameters) {
@@ -49618,14 +49650,14 @@ function buildParametersSectionHtml(parameters) {
     grouped.set(param.in, group);
   }
   const sections = [];
-  for (const paramType of PARAMETER_TYPE_ORDER2) {
+  for (const paramType of PARAMETER_TYPE_ORDER) {
     const params = grouped.get(paramType);
     if (!params || params.length === 0)
       continue;
     sections.push(buildSingleParameterSectionHtml(paramType, params));
   }
   for (const [paramType, params] of grouped) {
-    if (PARAMETER_TYPE_ORDER2.includes(paramType))
+    if (PARAMETER_TYPE_ORDER.includes(paramType))
       continue;
     if (params.length === 0)
       continue;
@@ -49634,7 +49666,7 @@ function buildParametersSectionHtml(parameters) {
   return sections.join("");
 }
 function buildSingleParameterSectionHtml(paramType, parameters) {
-  const title = PARAMETER_TYPE_LABELS2[paramType] ?? `${paramType} 파라미터`;
+  const title = PARAMETER_TYPE_LABELS[paramType] ?? `${paramType} 파라미터`;
   const rowsHtml = parameters.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.type)}</td><td>${escapeHtml(p.format ?? "")}</td><td class="center">${p.required ? "O" : ""}</td><td>${escapeHtml(p.description ?? "")}</td><td>${escapeHtml(p.example ?? "")}</td></tr>`).join("");
   return `<div class="subsection-title">${escapeHtml(title)}</div><table class="preview-table"><thead><tr><th>이름</th><th>타입</th><th>형식</th><th>필수</th><th>설명</th><th>예시</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
 }
@@ -49642,14 +49674,13 @@ function buildRequestBodySectionHtml(requestBody) {
   const title = `요청 바디 (${requestBody.contentType})`;
   let content;
   if (requestBody.properties.length === 0) {
-    const lower = requestBody.contentType.toLowerCase();
-    const isFile = lower.includes("octet-stream") || lower.includes("multipart");
+    const isFile = isFileContentType(requestBody.contentType);
     content = `<p class="empty-note">${isFile ? "(첨부파일)" : "(스키마 없음)"}</p>`;
   } else {
     content = buildPropertiesTableHtml(requestBody.properties);
   }
   const samples = requestBody.samples.map((sample2) => {
-    const sampleTitle = formatSampleTitle2("요청 예시", sample2);
+    const sampleTitle = formatSampleTitle("요청 예시", sample2);
     return buildSampleSectionHtml(sampleTitle, sample2.value);
   }).join("");
   return `<div class="subsection-title">${escapeHtml(title)}</div>${content}${samples}`;
@@ -49669,7 +49700,7 @@ function buildResponseSectionHtml(response) {
   const propertiesHtml = response.properties.length > 0 ? buildPropertiesTableHtml(response.properties) : "";
   const samples = response.samples.map((sample2) => {
     const baseTitle = `응답 ${response.statusCode} 예시`;
-    const sampleTitle = formatSampleTitle2(baseTitle, sample2);
+    const sampleTitle = formatSampleTitle(baseTitle, sample2);
     return buildSampleSectionHtml(sampleTitle, sample2.value);
   }).join("");
   return `<div class="subsection-title">${escapeHtml(title)}</div>${metaHtml}${propertiesHtml}${samples}`;
@@ -49690,28 +49721,12 @@ function buildPropertyRowsHtml(properties, depth) {
 function buildSampleSectionHtml(title, value) {
   return `<div class="sample-title">${escapeHtml(title)}</div><pre class="sample-code">${escapeHtml(value)}</pre>`;
 }
-function formatSampleTitle2(baseTitle, sample2) {
-  if (sample2.summary)
-    return `${baseTitle}: ${sample2.summary}`;
-  if (sample2.name && sample2.name !== "default")
-    return `${baseTitle}: ${sample2.name}`;
-  return baseTitle;
-}
-function buildEndpointUrl2(baseUrl, endpointPath) {
-  if (!baseUrl)
-    return endpointPath;
-  if (!endpointPath)
-    return baseUrl;
-  const trimmedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const trimmedPath = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
-  return `${trimmedBase}${trimmedPath}`;
-}
 function resolveServerRows2(servers, endpointPath) {
   if (servers.length === 0)
     return [];
   const normalized = servers.map((server) => ({
     ...server,
-    endpointUrl: buildEndpointUrl2(server.url, endpointPath),
+    endpointUrl: buildEndpointUrl(server.url, endpointPath),
     descriptor: `${server.description ?? ""} ${server.url}`.toLowerCase()
   }));
   const devKeywords = [
@@ -49765,7 +49780,8 @@ var PREVIEW_DEBOUNCE_MS = 300;
 var uiState = {
   previewRequestId: 0,
   previewTimer: null,
-  sourceName: "openapi"
+  sourceName: "openapi",
+  sourceUrl: null
 };
 var sourceInput = getElement("sourceFile");
 var sourceText = getElement("sourceText");
@@ -49781,6 +49797,7 @@ sourceInput.addEventListener("change", async () => {
       return;
     }
     uiState.sourceName = getFileNameWithoutExt(file.name);
+    uiState.sourceUrl = null;
     sourceText.value = await file.text();
     setStatus(`파일 로드 완료: ${file.name}`);
     await updatePreview();
@@ -49815,7 +49832,7 @@ convertButton.addEventListener("click", async () => {
     cancelPreviewUpdate();
     resetPreview();
     setStatus("OpenAPI 문서 파싱 중...");
-    const xlsxData = await buildXlsxDataFromText(raw);
+    const xlsxData = await buildXlsxDataFromText(raw, uiState.sourceUrl);
     setStatus("미리 보기 생성 중...");
     renderPreview(xlsxData, previewContainer);
     setStatus("엑셀 파일 생성 중...");
@@ -49873,6 +49890,7 @@ async function loadFromUrl() {
     }
     sourceText.value = await response.text();
     uiState.sourceName = getSourceNameFromUrl(url);
+    uiState.sourceUrl = url.href;
     setStatus(`URL 로드 완료: ${url.href}`);
     await updatePreview();
   } catch (error) {
@@ -49891,7 +49909,7 @@ async function updatePreview() {
   }
   try {
     setStatus("미리 보기 업데이트 중...");
-    const xlsxData = await buildXlsxDataFromText(raw);
+    const xlsxData = await buildXlsxDataFromText(raw, uiState.sourceUrl);
     if (requestId !== uiState.previewRequestId)
       return;
     renderPreview(xlsxData, previewContainer);
@@ -49921,14 +49939,14 @@ function clearPreviewTimer() {
   clearTimeout(uiState.previewTimer);
   uiState.previewTimer = null;
 }
-async function buildXlsxDataFromText(raw) {
-  const document2 = await parseOpenApiFromText(raw);
+async function buildXlsxDataFromText(raw, baseUrl) {
+  const document2 = await parseOpenApiFromText(raw, baseUrl);
   const validated = validateOpenApiDocument(document2);
   return extractEndpoints(validated);
 }
-async function parseOpenApiFromText(raw) {
+async function parseOpenApiFromText(raw, baseUrl) {
   const parsed = jsYaml.load(raw);
-  return await import_swagger_parser.default.dereference(parsed);
+  return baseUrl ? await import_swagger_parser.default.dereference(baseUrl, parsed, {}) : await import_swagger_parser.default.dereference(parsed);
 }
 function validateOpenApiDocument(api) {
   if (!("openapi" in api) || typeof api.openapi !== "string") {
@@ -49968,8 +49986,4 @@ function getElement(id) {
 function getSourceNameFromUrl(url) {
   const lastSegment = url.pathname.split("/").filter(Boolean).pop();
   return lastSegment ? getFileNameWithoutExt(lastSegment) : "openapi";
-}
-function getFileNameWithoutExt(fileName) {
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }
