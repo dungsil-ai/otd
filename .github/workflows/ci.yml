@@ -19,6 +19,16 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            gradle-plugin/*.gradle.kts
+            gradle-plugin/gradle/wrapper/gradle-wrapper.properties
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -27,6 +37,9 @@ jobs:
 
       - name: Type check
         run: bun run typecheck
+
+      - name: Test Gradle plugin
+        run: ./gradle-plugin/gradlew -p gradle-plugin check
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
