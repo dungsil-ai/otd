@@ -39,7 +39,7 @@
     "openapi-sampler": "^1.7.4"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.2",
+    "@biomejs/biome": "^2.5.5",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@types/openapi-sampler": "^1.0.3",
