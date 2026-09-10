@@ -34,7 +34,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@apidevtools/swagger-parser": "^12.1.0",
+    "@apidevtools/swagger-parser": "^13.0.0",
     "exceljs": "^4.4.0",
     "openapi-sampler": "^1.7.4"
   },
